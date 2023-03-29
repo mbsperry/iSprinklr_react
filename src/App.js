@@ -1,13 +1,10 @@
  import './App.css';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Form, InputGroup, Container, Button, Card, Stack } from "react-bootstrap";
 
 const Sprinklers = { "1": "East", "2": "West", "3": "Backyard" }
-const BLUE = "#cfe2ff";
-const GREEN = "#d1e7dd";
-const RED = "#f8d7da";
 
 function SprinklrSelect({onChange}) {
   function MakeList() {
@@ -35,8 +32,18 @@ function SprinklrSelect({onChange}) {
   )
 }
 
-function DurationInput({sprinklr}) {
+function DurationInput({ visible, setDuration }) {
   const [validated, setValidated] = useState(false);
+  const [buttonColor, setButtonColor] = useState("primary");
+  const formValue = useRef(null);
+
+  function onChange(e) {
+    formValue.current = e.target.value;
+  }
+  // First, check to make sure input is valid
+  // I didn't pass duration state down here, since it can be infered
+  // Use buttonColor to indicate state of the system. If "primary" the system is stopped
+  // If "danger" the system is running
   function handleSubmit(e) {
     if (e.target.checkValidity() === false) { 
       e.preventDefault(); 
@@ -44,27 +51,37 @@ function DurationInput({sprinklr}) {
       return 
     };
     e.preventDefault();
-    console.log("Sumbitted");
-    console.log(e.target)
-  }
-  if (sprinklr < 1) {
+    if (buttonColor === "primary") {
+      setDuration(formValue.current);
+      setButtonColor("danger");
+      console.log("Sumbitted");
+    } else {
+      setDuration(null);
+      setButtonColor("primary");
+    }
+  };
+  
+  // Don't render if a spinkler hasn't been selected yet
+  if (visible === false) {
     return <></>
-  }
+  };
+  
   return (
     <Form noValidate validated={validated} onSubmit={handleSubmit}>
-      <Form.Control required type="number" min="1" step="1" max="60" placeholder='Duration in whole minutes'></Form.Control>
+      <Form.Control required type="number" min="1" step="1" max="60" onChange={onChange} placeholder='Duration in whole minutes'></Form.Control>
       <Form.Control.Feedback type="invalid">Please enter duration in whole minutes only. Max 60 min.</Form.Control.Feedback>
-      <Button type="submit" className="mt-2">Activate!</Button>
+      <Button type="submit" variant={buttonColor} className="mt-2">{buttonColor === "primary" ? "Activate!" : "Stop"}</Button>
     </Form>
   )
 }
 
-function InputCard() {
-  const [sprinklr, setSprinklr] = useState("0");
-  
-  function onSprinklrChange(e) {
-    console.log(e.target.value);
-    setSprinklr(e.target.value);
+function InputCard({duration, setDuration, sprinklr, onSprinklrChange}) {
+  // Default is DurationInput is not visible
+  let isVisible = false;
+
+  // Only show it if a sprinklr has been selected
+  if (sprinklr > 0) {
+    isVisible = true;
   }
 
   return (
@@ -73,7 +90,7 @@ function InputCard() {
         <Card.Body>
           <Stack gap="2">
             <SprinklrSelect onChange={onSprinklrChange} />
-            <DurationInput sprinklr={sprinklr}/>
+            <DurationInput visible={isVisible} setDuration={setDuration}/>
           </Stack>
         </Card.Body>
       </Card>
@@ -81,24 +98,20 @@ function InputCard() {
   )
 }
 
-function AlertCard() {
-  return (
-    <>
-      <Card bg="danger" className="d-none">
-        <Card.Body>
-          This is an alert
-        </Card.Body>
-      </Card>
-    </>
-  )
-}
+function StatusCard({duration, sprinklr}) {
+  let color = "bg-info";
+  let msg = "System inactive";
 
-function StatusCard() {
+  if (duration > 0) {
+    color = "bg-success";
+    msg = `${Sprinklers[sprinklr]} zone is running`;
+  }
+
   return (
     <>
-      <Card className="bg-info bg-opacity-25">
+      <Card className={color + " bg-opacity-25"}>
         <Card.Body>
-          System disabled
+          {msg}
         </Card.Body>
       </Card>
     </>
@@ -106,14 +119,22 @@ function StatusCard() {
 }
 
 function App() {
+  // Top level state variable, which spinklr has been selected and what is the duration
+  // If duration is a positive number the system has been activated
+  const [duration, setDuration] = useState(null);
+  const [sprinklr, setSprinklr] = useState("0");
+  
+  function onSprinklrChange(e) {
+    setSprinklr(e.target.value);
+  }
+
   return (
     <Container>
       <h1>###iSprinklr###</h1>
       <p>React based Sprinklr control</p>
       <Stack gap="2">
-        <InputCard />
-        <StatusCard />
-        <AlertCard />
+        <InputCard duration={duration} setDuration={setDuration} sprinklr={sprinklr} onSprinklrChange={onSprinklrChange}/>
+        <StatusCard duration={duration} sprinklr={sprinklr}/>
       </Stack>
     
     </Container>
