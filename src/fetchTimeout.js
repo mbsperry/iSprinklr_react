@@ -1,3 +1,5 @@
+// Fetch from API but timeout after 8 seconds if no response
+
 export async function fetchTimeout(resource, options = {}) {
   const { timeout = 8000 } = options;
   

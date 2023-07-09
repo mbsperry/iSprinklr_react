@@ -113,7 +113,7 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
     msg = "System is Idle";
   } else {
     color = "bg-danger";
-    msg = systemStatus.message;
+    msg = `Error: ${systemStatus.message}`;
   }
 
   return (
@@ -128,14 +128,13 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
 }
 
 function App() {
-  // Top level state variable, which spinklr has been selected and what is the duration
-  // If duration is a positive number the system has been activated
   const [duration, setDuration] = useState(0);
   const [sprinklr, setSprinklr] = useState("0");
   const [sprinklerList, setSprinklerList] = useState([]);
   const [systemStatus, setSystemStatus] = useState({"status": "inactive", "message": "System is idle"});
   const [isLoading, setLoading] = useState(true);
   const [countDownDate, setCountDownDate] = useState(0);
+  // countDownDate is the end time for the running sprinkler.
 
   // Handle errors thrown by fetch
   const handleError = response => {
@@ -148,40 +147,41 @@ function App() {
 
   // Get the system status from the server
   const fetchSystemStatus = async () => {
-    fetchTimeout(`http://${API_SERVER}/api/status`)
-      .then(handleError)
-      .then((data) => { 
-        // setSystemStatus(data.message);
-        if (data.systemStatus === "error") {
-          setSystemStatus({"status": "error", "message": data.message});
-          return;
-        } else if (data.systemStatus === "active") {
-          onStatusChange(data.duration, "update");
-          setSprinklr(data.zone);
-        } else {
-          setSystemStatus({"status": "inactive", "message": "System is idle"});
-          setDuration(0);
-        }
-      })
-      .catch((error) => {
-        setSystemStatus({"status": "error", "message": error.message});
-        setDuration(-1);
-      });
+    try {
+      let res = await fetchTimeout(`http://${API_SERVER}/api/status`);
+      let data = await handleError(res);
+      // setSystemStatus(data.message);
+      if (data.systemStatus === "error") {
+        setSystemStatus({"status": "error", "message": data.message});
+        return;
+      } else if (data.systemStatus === "active") {
+        // This happens when the system was already activated somewhere else
+        // Get must set duration timer and current zone (not used, but will generate errors if systemStatus is active and no zone is set)
+        onStatusChange(data.duration, "update");
+        setSprinklr(data.zone);
+      } else {
+        // Default
+        setSystemStatus({"status": "inactive", "message": "System is idle"});
+        setDuration(0);
+      }
+    } catch(error) {
+      setSystemStatus({"status": "error", "message": error.message});
+      setDuration(-1);
+    };
   }
 
   // Get the list of sprinklers from the server
   const fetchSprinklerData = async () => {
-    fetchTimeout(`http://${API_SERVER}/api/sprinklers`)
-      .then(handleError)
-      .then((data) => { 
-        setSprinklerList(data);
-        setLoading(false);
-      })
-      .catch((error) => { 
-        setSystemStatus({"status": "error", "message": error.message});
-        setDuration(-1);
-        setLoading(false);
-      });
+    try {
+      let res = await fetchTimeout(`http://${API_SERVER}/api/sprinklers`);
+      let data = await handleError(res);
+      setSprinklerList(data);
+      setLoading(false);
+    } catch (error) {
+      setSystemStatus({ "status": "error", "message": error.message });
+      setDuration(-1);
+      setLoading(false);
+    };
   }
 
   const startSprinkler = async (newDuration) => {
@@ -192,6 +192,7 @@ function App() {
     } catch(error) {
       setSystemStatus({"status": "error", "message": error.message});
       setDuration(-1);
+      return { "systemStatus": "error", "message": error.message };
     };
   }
 
@@ -203,10 +204,12 @@ function App() {
     } catch(error) {
       setSystemStatus({"status": "error", "message": error.message});
       setDuration(-1);
+      return { "systemStatus": "error", "message": error.message };
     };
   }
   
 
+  // Fetch the system status and sprinkler data on initial load
   useEffect(() => {
     document.title = "iSprinklr";
     fetchSystemStatus();
@@ -218,7 +221,8 @@ function App() {
     setSprinklr(e.target.value);
   }
 
-  // Handle duration status changes, triggered when the user clicks the activate button, or when the countdown timer reaches zero
+  // Handle system status changes, triggered when the user clicks the activate button, or when the countdown timer reaches zero
+  // Also triggered if initial page load returns an active system
   function onStatusChange(newDuration, action) {
     if (action === "start") {
       startSprinkler(newDuration).then((response) => {
