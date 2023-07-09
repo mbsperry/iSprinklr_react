@@ -34,14 +34,14 @@ function SprinklrSelect({sprinklerList, onChange}) {
 function DurationInput({ visible, systemStatus, onStatusChange }) {
   const [validated, setValidated] = useState(false);
   const formValue = useRef(null);
-  let buttonColor = (systemStatus === "active") ? "danger" : "primary";
+  let buttonColor = (systemStatus.status === "active") ? "danger" : "primary";
 
   function onChange(e) {
     formValue.current = e.target.value;
   }
   // First, check to make sure input is valid
   function handleSubmit(e) {
-    if (systemStatus === "inactive") {
+    if (systemStatus.status === "inactive") {
       if (e.target.checkValidity() === false) {
         e.preventDefault();
         setValidated(true);
@@ -49,11 +49,11 @@ function DurationInput({ visible, systemStatus, onStatusChange }) {
       };
     }
     e.preventDefault();
-    if (buttonColor === "primary" && systemStatus === "inactive") {
-      onStatusChange(formValue.current);
+    if (buttonColor === "primary" && systemStatus.status === "inactive") {
+      onStatusChange(formValue.current, "start");
       buttonColor = 'danger';
     } else {
-      onStatusChange(0);
+      onStatusChange(0, "stop");
       buttonColor = 'primary';
     }
   };
@@ -97,22 +97,22 @@ function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onS
 
 function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onStatusChange}) {
   let color = "bg-info";
-  let msg = systemStatus;
+  let msg = systemStatus.message;
   const [min,sec] = useCountdown(countDownDate);
 
-  if (systemStatus === "active" && countDownDate - new Date().getTime() < 0) {
-    onStatusChange(0);
+  if (systemStatus.status === "active" && countDownDate - new Date().getTime() < 0) {
+    onStatusChange(0, "update");
   }
 
-  if (systemStatus === "active") { 
+  if (systemStatus.status === "active") { 
     color = "bg-success";
-    msg = `${sprinklerList[sprinklr-1].name} zone is running. Remaining time: ${min}:${sec}`;
-  } else if (systemStatus === "inactive") {
+    msg = `Active Zone: ${sprinklerList[sprinklr-1].name}. Remaining time: ${min}:${sec}`;
+  } else if (systemStatus.status === "inactive") {
     color = "bg-info";
     msg = "System is Idle";
   } else {
     color = "bg-danger";
-    msg = systemStatus;
+    msg = systemStatus.message;
   }
 
   return (
@@ -132,7 +132,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [sprinklr, setSprinklr] = useState("0");
   const [sprinklerList, setSprinklerList] = useState([]);
-  const [systemStatus, setSystemStatus] = useState("inactive");
+  const [systemStatus, setSystemStatus] = useState({"status": "inactive", "message": "System is idle"});
   const [isLoading, setLoading] = useState(true);
   const [countDownDate, setCountDownDate] = useState(0);
 
@@ -152,16 +152,18 @@ function App() {
       .then((data) => { 
         // setSystemStatus(data.message);
         if (data.systemStatus === "error") {
-          setSystemStatus(data.message);
+          setSystemStatus({"status": "error", "message": data.message});
           return;
-        }
-        setDuration(Number(data.duration));
-        if (data.duration > 0) {
+        } else if (data.systemStatus === "active") {
+          onStatusChange(data.duration, "update");
           setSprinklr(data.zone);
+        } else {
+          setSystemStatus({"status": "inactive", "message": "System is idle"});
+          setDuration(0);
         }
       })
       .catch((error) => {
-        setSystemStatus(error.message);
+        setSystemStatus({"status": "error", "message": error.message});
         setDuration(-1);
       });
   }
@@ -175,36 +177,32 @@ function App() {
         setLoading(false);
       })
       .catch((error) => { 
-        setSystemStatus(error.message);
+        setSystemStatus({"status": "error", "message": error.message});
         setDuration(-1);
         setLoading(false);
       });
   }
 
   const startSprinkler = async (newDuration) => {
-    fetchTimeout("http://192.168.88.160:8080/api/start_sprinklr/" + sprinklr + "/duration/" + newDuration)
-    .then(handleError)
-    .then((data) => {
-      console.log(data.message)
+    try {
+      let response = await fetchTimeout("http://192.168.88.160:8080/api/start_sprinklr/" + sprinklr + "/duration/" + newDuration);
+      let data = await handleError(response);
       return data;
-    })
-    .catch((error) => {
-      setSystemStatus(error.message);
+    } catch(error) {
+      setSystemStatus({"status": "error", "message": error.message});
       setDuration(-1);
-    });
+    };
   }
 
   const stopSprinkler = async () => {
-    fetchTimeout("http://192.168.88.160:8080/api/stop_sprinklr")
-    .then(handleError)
-    .then((data) => {
-      console.log(data.message)
+    try {
+      let response = await fetchTimeout("http://192.168.88.160:8080/api/stop_sprinklr")
+      let data = await handleError(response);
       return data;
-    })
-    .catch((error) => {
-      setSystemStatus(error.message);
+    } catch(error) {
+      setSystemStatus({"status": "error", "message": error.message});
       setDuration(-1);
-    });
+    };
   }
   
 
@@ -220,28 +218,50 @@ function App() {
   }
 
   // Handle duration status changes, triggered when the user clicks the activate button, or when the countdown timer reaches zero
-  function onStatusChange(newDuration) {
-    if (newDuration > 0) {
-      const response = startSprinkler(newDuration);
-      if ( response.systemStatus === "error" ) {
-        setSystemStatus(response.message);
-        setDuration(-1);
-        return;
-      } else if (response.systemStatus === "active" && response.zone != sprinklr) {
-        setSystemStatus("Error, system already active on zone " + response.zone);
-        setDuration(response.duration);
+  function onStatusChange(newDuration, action) {
+    if (action === "start") {
+      startSprinkler(newDuration).then((response) => {
+        console.log("API response: " + response.message);
+        if ( response.systemStatus === "error" ) {
+          console.log(response.message);
+          setSystemStatus({"message": response.message, "status": "error"});
+          setDuration(-1);
+          return;
+        } else if (response.systemStatus === "active" && response.zone != sprinklr) {
+          setSystemStatus({"status": "active", "message": "Error, system already active on zone " + response.zone});
+          setDuration(response.duration);
+          setCountDownDate(new Date().getTime() + newDuration * 60000);
+          return;
+        } 
+        console.log("System activated!");
+        console.log(response.message)
+        setDuration(newDuration);
+        setSystemStatus({"status": "active", "message": "System active"}); 
         setCountDownDate(new Date().getTime() + newDuration * 60000);
-        return;
-      }
+      });
+    } else if (action === "stop") {
+      stopSprinkler().then((response) => {
+        console.log("API response: " + response.message);
+        if ( response.systemStatus === "error" ) {
+          console.log(response.message);
+          setSystemStatus({"status": "error", "message": response.message});
+          setDuration(-1);
+          return;
+        } else {
+          setDuration(0);
+          setSystemStatus({"status": "inactive", "message": "System is idle"});
+          setCountDownDate(0);
+        }
+      });
+    } else if (action === "update" && newDuration > 0) {
+      setCountDownDate(new Date().getTime() + newDuration * 1000);
       setDuration(newDuration);
-      setSystemStatus("active"); 
-      setCountDownDate(new Date().getTime() + newDuration * 60000);
-    } else if (newDuration === 0) {
-      stopSprinkler();
+      setSystemStatus({"status": "active", "message": "System active"});
+    } else if (action === "update" && newDuration === 0) {
       setDuration(0);
-      setSystemStatus("inactive");
+      setSystemStatus({"status": "inactive", "message": "System is idle"});
       setCountDownDate(0);
-    }
+    } 
   }
 
   if (isLoading) {
