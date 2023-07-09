@@ -6,6 +6,7 @@ import { useCountdown } from './useCountdown';
 import { useState, useRef, useEffect } from 'react';
 import { Form, InputGroup, Container, Button, Card, Stack } from "react-bootstrap";
 
+const API_SERVER = "192.168.88.160:8080";
 
 function SprinklrSelect({sprinklerList, onChange}) {
   function MakeList() {
@@ -147,7 +148,7 @@ function App() {
 
   // Get the system status from the server
   const fetchSystemStatus = async () => {
-    fetchTimeout("http://192.168.88.160:8080/api/status")
+    fetchTimeout(`http://${API_SERVER}/api/status`)
       .then(handleError)
       .then((data) => { 
         // setSystemStatus(data.message);
@@ -170,7 +171,7 @@ function App() {
 
   // Get the list of sprinklers from the server
   const fetchSprinklerData = async () => {
-    fetchTimeout("http://192.168.88.160:8080/api/sprinklers")
+    fetchTimeout(`http://${API_SERVER}/api/sprinklers`)
       .then(handleError)
       .then((data) => { 
         setSprinklerList(data);
@@ -185,7 +186,7 @@ function App() {
 
   const startSprinkler = async (newDuration) => {
     try {
-      let response = await fetchTimeout("http://192.168.88.160:8080/api/start_sprinklr/" + sprinklr + "/duration/" + newDuration);
+      let response = await fetchTimeout(`http://${API_SERVER}/api/start_sprinklr/${sprinklr}/duration/${newDuration}`);
       let data = await handleError(response);
       return data;
     } catch(error) {
@@ -196,7 +197,7 @@ function App() {
 
   const stopSprinkler = async () => {
     try {
-      let response = await fetchTimeout("http://192.168.88.160:8080/api/stop_sprinklr")
+      let response = await fetchTimeout(`http://${API_SERVER}/api/stop_sprinklr`);
       let data = await handleError(response);
       return data;
     } catch(error) {
@@ -223,7 +224,6 @@ function App() {
       startSprinkler(newDuration).then((response) => {
         console.log("API response: " + response.message);
         if ( response.systemStatus === "error" ) {
-          console.log(response.message);
           setSystemStatus({"message": response.message, "status": "error"});
           setDuration(-1);
           return;
@@ -233,8 +233,6 @@ function App() {
           setCountDownDate(new Date().getTime() + newDuration * 60000);
           return;
         } 
-        console.log("System activated!");
-        console.log(response.message)
         setDuration(newDuration);
         setSystemStatus({"status": "active", "message": "System active"}); 
         setCountDownDate(new Date().getTime() + newDuration * 60000);
@@ -243,7 +241,6 @@ function App() {
       stopSprinkler().then((response) => {
         console.log("API response: " + response.message);
         if ( response.systemStatus === "error" ) {
-          console.log(response.message);
           setSystemStatus({"status": "error", "message": response.message});
           setDuration(-1);
           return;
