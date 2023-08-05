@@ -108,6 +108,9 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
   if (systemStatus.status === "active") { 
     color = "bg-success";
     msg = `Active Zone: ${sprinklerList[sprinklr-1].name}. Remaining time: ${min}:${sec}`;
+  } else if (systemStatus.status === "loading") {
+    color = "bg-warning";
+    msg = systemStatus.message;
   } else if (systemStatus.status === "inactive") {
     color = "bg-info";
     msg = "System is Idle";
@@ -116,11 +119,18 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
     msg = `Error: ${systemStatus.message}`;
   }
 
+  const handleReset = () => {
+    window.location.reload();
+  }
+
   return (
     <>
       <Card className={color + " bg-opacity-25"}>
         <Card.Body>
-          {msg}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span> {msg} </span>
+            {(systemStatus.status === "error") && <Button onClick={handleReset} variant="warning"> Reset </Button>}
+          </div>
         </Card.Body>
       </Card>
     </>
@@ -131,7 +141,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [sprinklr, setSprinklr] = useState("0");
   const [sprinklerList, setSprinklerList] = useState([]);
-  const [systemStatus, setSystemStatus] = useState({"status": "inactive", "message": "System is idle"});
+  const [systemStatus, setSystemStatus] = useState({"status": "loading", "message": "Waiting for arduino..."});
   const [isLoading, setLoading] = useState(true);
   const [countDownDate, setCountDownDate] = useState(0);
   // countDownDate is the end time for the running sprinkler.
