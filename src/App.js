@@ -6,7 +6,18 @@ import { useCountdown } from './useCountdown';
 import { useState, useRef, useEffect } from 'react';
 import { Form, InputGroup, Container, Button, Card, Stack } from "react-bootstrap";
 
-const API_SERVER = "192.168.88.160:8080";
+fetch('conf.json')
+  .then(response => response.json())
+  .then(data => {
+    // Use the loaded JSON data here
+    const API_SERVER = data.api_server;
+  })
+  .catch(error => {
+    console.error('Error loading configuration JSON file:', error);
+    const API_SERVER = "0.0.0.0:8080";
+  });
+
+// const API_SERVER = "192.168.88.160:8080";
 
 function SprinklrSelect({sprinklerList, onChange}) {
   function MakeList() {
