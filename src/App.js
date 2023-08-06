@@ -1,21 +1,12 @@
  import './App.css';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
+import config from './config.js';
 import { fetchTimeout } from './fetchTimeout.js';
 import { useCountdown } from './useCountdown';
 import { useState, useRef, useEffect } from 'react';
 import { Form, InputGroup, Container, Button, Card, Stack } from "react-bootstrap";
 
-fetch('conf.json')
-  .then(response => response.json())
-  .then(data => {
-    // Use the loaded JSON data here
-    const API_SERVER = data.api_server;
-  })
-  .catch(error => {
-    console.error('Error loading configuration JSON file:', error);
-    const API_SERVER = "0.0.0.0:8080";
-  });
 
 // const API_SERVER = "192.168.88.160:8080";
 
@@ -157,6 +148,7 @@ function App() {
   const [countDownDate, setCountDownDate] = useState(0);
   // countDownDate is the end time for the running sprinkler.
 
+
   // Handle errors thrown by fetch
   const handleError = response => {
    if (!response.ok) { 
@@ -164,12 +156,12 @@ function App() {
    } else {
       return response.json();
    }
-  }; //handler function that throws any encountered error
+  };
 
   // Get the system status from the server
   const fetchSystemStatus = async () => {
     try {
-      let res = await fetchTimeout(`http://${API_SERVER}/api/status`);
+      let res = await fetchTimeout(`http://${config.API_SERVER}/api/status`);
       let data = await handleError(res);
       // setSystemStatus(data.message);
       if (data.systemStatus === "error") {
@@ -194,7 +186,7 @@ function App() {
   // Get the list of sprinklers from the server
   const fetchSprinklerData = async () => {
     try {
-      let res = await fetchTimeout(`http://${API_SERVER}/api/sprinklers`);
+      let res = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers`);
       let data = await handleError(res);
       setSprinklerList(data);
       setLoading(false);
@@ -207,7 +199,7 @@ function App() {
 
   const startSprinkler = async (newDuration) => {
     try {
-      let response = await fetchTimeout(`http://${API_SERVER}/api/start_sprinklr/${sprinklr}/duration/${newDuration}`);
+      let response = await fetchTimeout(`http://${config.API_SERVER}/api/start_sprinklr/${sprinklr}/duration/${newDuration}`);
       let data = await handleError(response);
       return data;
     } catch(error) {
@@ -219,7 +211,7 @@ function App() {
 
   const stopSprinkler = async () => {
     try {
-      let response = await fetchTimeout(`http://${API_SERVER}/api/stop_sprinklr`);
+      let response = await fetchTimeout(`http://${config.API_SERVER}/api/stop_sprinklr`);
       let data = await handleError(response);
       return data;
     } catch(error) {
@@ -252,7 +244,7 @@ function App() {
           setSystemStatus({"message": response.message, "status": "error"});
           setDuration(-1);
           return;
-        } else if (response.systemStatus === "active" && response.zone != sprinklr) {
+        } else if (response.systemStatus === "active" && response.zone !== sprinklr) {
           setSystemStatus({"status": "active", "message": "Error, system already active on zone " + response.zone});
           setDuration(response.duration);
           setCountDownDate(new Date().getTime() + newDuration * 60000);

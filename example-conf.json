@@ -1,5 +1,0 @@
-Replace with your api server address:port and rename to conf.json. Delete this line
-
-{
-    "api_server": "your server:port"
-}
