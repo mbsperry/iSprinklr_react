@@ -116,8 +116,8 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
     // msg = `<p>Active Zone: ${sprinklerList[sprinklr - 1].name}<\p>Remaining time: ${formattedMin}:${formattedSec}`;
     msg = (
       <>
-        <p>Active Zone: {sprinklerList[sprinklr - 1].name}<br />
-        Remaining time: {formattedMin}:{formattedSec}</p>
+        <p><b>Active Zone:</b> {sprinklerList[sprinklr - 1].name}<br />
+        <b>Remaining time:</b> {formattedMin}:{formattedSec}</p>
       </>
     );
   } else if (systemStatus.status === "loading") {
