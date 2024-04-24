@@ -102,6 +102,10 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
   let color = "bg-info";
   let msg = systemStatus.message;
   const [min,sec] = useCountdown(countDownDate);
+  
+  // Format minutes and seconds to always have two digits
+  const formattedMin = min.toString().padStart(2, '0');
+  const formattedSec = sec.toString().padStart(2, '0');
 
   if (systemStatus.status === "active" && countDownDate - new Date().getTime() < 0) {
     onStatusChange(0, "update");
@@ -109,7 +113,13 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
 
   if (systemStatus.status === "active") { 
     color = "bg-success";
-    msg = `Active Zone: ${sprinklerList[sprinklr-1].name}. Remaining time: ${min}:${sec}`;
+    // msg = `<p>Active Zone: ${sprinklerList[sprinklr - 1].name}<\p>Remaining time: ${formattedMin}:${formattedSec}`;
+    msg = (
+      <>
+        <p>Active Zone: {sprinklerList[sprinklr - 1].name}<br />
+        Remaining time: {formattedMin}:{formattedSec}</p>
+      </>
+    );
   } else if (systemStatus.status === "loading") {
     color = "bg-warning";
     msg = systemStatus.message;
