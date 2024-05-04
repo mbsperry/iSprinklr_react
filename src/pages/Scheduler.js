@@ -1,5 +1,4 @@
 import Container from 'react-bootstrap/Container';
-import Table from 'react-bootstrap/Table';
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchTimeout } from '../fetchTimeout.js';
@@ -13,18 +12,20 @@ import Col from 'react-bootstrap/Col';
 
 import config from '../config.js';
 
-const fetchSchedule = async () => {
+// TODO: reformat to use function defintions instead of arrow functions
+
+async function fetchSchedule() {
     const response = await fetchTimeout(`http://${config.API_SERVER}/api/get_schedule`);
     if (!response.ok) {
-        throw new Error('Network response was not ok')
+        throw new Error('Network response was not ok');
     }
     return response.json();
 }
 
-const fetchSprinklerList = async () => {
+async function fetchSprinklerList() {
     const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers`);
     if (!response.ok) {
-        throw new Error('Network response was not ok')
+        throw new Error('Network response was not ok');
     }
     return response.json();
 }
@@ -36,7 +37,15 @@ function ParseSchedule() {
     // Match the zone ID to the zone name
     const matchedSchedule = data.map((schedule) => {
         const matchedSprinkler = sprinklerList.find((sprinkler) => sprinkler.zone === schedule.zone);
-        return { ...schedule, name: matchedSprinkler.name };
+        if (schedule.day === "ALL") {
+            return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: "", multiDay: "ALL" };
+        } else if (schedule.day === "NONE") {
+            return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: "", multiDay: "NONE" };
+        } else if (schedule.day === "EO") {
+            return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: "", multiDay: "EO" };
+        } else {
+            return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: schedule.day, multiDay: "" };
+        }
     });
     return matchedSchedule;
 }
@@ -50,20 +59,37 @@ function ParseSchedule() {
   
 
 
-const ScheduleForm = () => {
-    const daysOfWeek = ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su', 'EO', 'none'];
+function ScheduleForm() {
+    const daysOfWeek = ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'];
     const [schedule, setSchedule] = useState(ParseSchedule());
 
     const defaultDays = (days) => {
-        // Convert a string with day abbreviations to an array of day abbreviations
-        // Example: "MWSa" => ['M', 'W', 'Sa']
-        return days.split('').map(day => daysOfWeek.find(d => d.includes(day)));
+        if (days === null) {
+            return [];
+        }
+        return days.split(':');
     };
 
+    // TODO: Only allow variable number of days of the week, or ALL, or NONE, or EO. Do not allow combinations of ALL, NONE, EO and days of the week
     const handleDayChange = (zone, value) => {
+        console.log(value);
+        let newDays;
+        if (Array.isArray(value)) {
+            newDays = value.join(':');
+        } else {
+            newDays = value;
+        }
         const newSchedule = schedule.map(s => {
             if (s.zone === zone) {
-                return { ...s, day: value };
+                if (newDays === "ALL") {
+                    return { ...s, daysOfWeek: "", multiDay: "ALL" };
+                } else if (newDays === "NONE") {
+                    return { ...s, daysOfWeek: "", multiDay: "NONE" };
+                } else if (newDays === "EO") {
+                    return { ...s, daysOfWeek: "", multiDay: "EO" };
+                } else {
+                    return { ...s, daysOfWeek: newDays, multiDay: "" };
+                }
             }
             return s;
         });
@@ -90,29 +116,62 @@ const ScheduleForm = () => {
         // setSchedule(matchedSchedule); // Reset to original schedule
     };
 
+
+    function DayOfWeekButtons({ scheduleItem, index }) {
+        return (
+            <Form.Group style={{ paddingBottom: '10px' }}>
+                <ToggleButtonGroup type="checkbox" name={`dayOfWeek-${index}`} defaultValue={defaultDays(scheduleItem.daysOfWeek)} onChange={(value) => handleDayChange(scheduleItem.zone, value)}>
+                    {daysOfWeek.map(day => (
+                        <ToggleButton key={day} id={`toggle-${day}-${index}`} value={day} variant={scheduleItem.daysOfWeek.includes(day) ? 'outline-success' : 'outline-secondary'}>
+                            {day}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+            </Form.Group> 
+        );
+    }
+
+    function MultiDayButtons({ scheduleItem, index }) {
+        return (
+            <Form.Group>
+                <ToggleButtonGroup type="radio" name={`multiDaySelector-${index}`} defaultValue={defaultDays(scheduleItem.multiDay)} onChange={(value) => handleDayChange(scheduleItem.zone, value)}>
+                    <ToggleButton key={"ALL"} id={`all-${index}`} value={"ALL"} variant={scheduleItem.multiDay === "ALL" ? 'outline-success' : 'outline-secondary'}>
+                        ALL
+                    </ToggleButton>
+                    <ToggleButton key={"NONE"} id={`none-${index}`} value={"NONE"} variant={scheduleItem.multiDay === "NONE" ? 'outline-success' : 'outline-secondary'}>
+                        NONE
+                    </ToggleButton>
+                    <ToggleButton key={"EO"} id={`eo-${index}`} value={"EO"} variant={scheduleItem.multiDay === "EO" ? 'outline-success' : 'outline-secondary'}>
+                        EO
+                    </ToggleButton>
+                </ToggleButtonGroup>
+            </Form.Group>
+        );
+    }
+
     return (
         <Form onSubmit={handleSubmit}>
             <Row>
-                <Col>Zone</Col>
+                <Col md="3">Zone</Col>
+                <Col md="2">Duration</Col>
                 <Col>Day</Col>
-                <Col>Duration</Col>
             </Row>
             <hr />
             {schedule.map((s, index) => (
-                <Form.Group as={Row} controlId={`schedule-${index}`} style={{ paddingTop: "10px" }}>
-                    <Form.Label column>{s.name}</Form.Label>
-                    <Form.Group as={Col}>
-                        <ToggleButtonGroup type="checkbox" name={`dayOfWeek-${index}`} defaultValue={defaultDays(s.day)} onChange={(value) => handleDayChange(s.zone, value)}>
-                            {daysOfWeek.map(day => (
-                                <ToggleButton key={day} id={`toggle-${day}-${index}`} value={day}>
-                                    {day}
-                                </ToggleButton>
-                            ))}
-                        </ToggleButtonGroup>
-                    </Form.Group>
-                    <Form.Group as={Col}>
-                        <Form.Control type="number" defaultValue={s.duration} onChange={(event) => handleDurationChange(s.zone, event)} />
-                    </Form.Group>
+                <Form.Group as={Row} controlId={`schedule-${index}`} style={{ paddingTop: "10px", paddingBottom: "10px", background: (index % 2 === 0) ? 'white' : '#f2f2f2' }}>
+                    <Col md="2">
+                        <Form.Label column>{s.name}</Form.Label>
+                    </Col>
+                    <Col md="2">
+                        <Form.Group style={{ paddingBottom: "10px" }}>
+                            <Form.Control type="number" defaultValue={s.duration} onChange={(event) => handleDurationChange(s.zone, event)} />
+                        </Form.Group>
+                    </Col>
+                    <Col md="auto">
+                        <DayOfWeekButtons scheduleItem={s} index={index} /> 
+                        <MultiDayButtons scheduleItem={s} index={index} />
+                    </Col>
+                  
                 </Form.Group>
             ))}
             <hr />
