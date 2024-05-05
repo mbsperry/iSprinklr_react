@@ -1,6 +1,6 @@
 import Container from 'react-bootstrap/Container';
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchTimeout } from '../fetchTimeout.js';
 import { useState } from 'react';
 import Form from 'react-bootstrap/Form';
@@ -9,10 +9,10 @@ import ToggleButton from 'react-bootstrap/ToggleButton';
 import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
+import Modal from 'react-bootstrap/Modal';
 
 import config from '../config.js';
 
-// TODO: reformat to use function defintions instead of arrow functions
 
 async function fetchSchedule() {
     const response = await fetchTimeout(`http://${config.API_SERVER}/api/get_schedule`);
@@ -30,11 +30,38 @@ async function fetchSprinklerList() {
     return response.json();
 }
 
+async function postSchedule(schedule) {
+    const formattedSchedule = schedule.map(s => {
+        if (s.daysOfWeek === "") {
+            return { zone: s.zone, day: s.multiDay, duration: s.duration };
+        } else {
+            return { zone: s.zone, day: s.daysOfWeek, duration: s.duration };
+        }
+    });
+    console.log('Formatted schedule:', formattedSchedule);
+    const response = await fetchTimeout(`http://${config.API_SERVER}/api/set_schedule`, 
+        { 
+            method: 'POST', 
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ items: formattedSchedule }) 
+        });
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+    return response.json();
+}
+
+// Parse the schedule from the API into a format that is easier to use in the form
 function ParseSchedule() {
     const { data, error, isLoading } = useQuery({queryKey: ['schedules'], queryFn: fetchSchedule});
     const { data: sprinklerList, error: sprinklerListError, isLoading: isLoadingSprinklerList } = useQuery({queryKey: ['sprinklers'], queryFn: fetchSprinklerList});
 
     // Match the zone ID to the zone name
+    // Need to split the days of the week and the multiday tags into different variables to 
+    // allow either:or logic later on
     const matchedSchedule = data.map((schedule) => {
         const matchedSprinkler = sprinklerList.find((sprinkler) => sprinkler.zone === schedule.zone);
         if (schedule.day === "ALL") {
@@ -50,45 +77,51 @@ function ParseSchedule() {
     return matchedSchedule;
 }
 
-    // Build a form to edit the schedule
-    // The form should have a row for each sprinkler zone. 
-    // Each row will have a non-editable text field for the sprinkler name, a ToggleButtonGroup to select the day of the week (M, Tu, W, Th, F, Sa, Su, EO, none), and an input field for duration
-    // The form will have a submit button to save the changes
-    // The form will have a cancel button to discard the changes
-    // The form will be built using React Bootstrap
-  
-
-
 function ScheduleForm() {
     const daysOfWeek = ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'];
     const [schedule, setSchedule] = useState(ParseSchedule());
+    const originalSchedule = ParseSchedule();
+    const [showAlert, setShowAlert] = useState(false);
 
-    const defaultDays = (days) => {
+    const queryClient = useQueryClient();
+
+    const submitMutation = useMutation({
+        mutationFn: postSchedule,
+        onSuccess: () => {
+            queryClient.invalidateQueries('schedules');
+        },
+        onError: () => {
+            // Display alert with error
+            setShowAlert(true);
+        }
+    });
+
+    function handleCloseAlert() {
+        setShowAlert(false);
+    }
+
+    function defaultDays(days) {
         if (days === null) {
             return [];
         }
         return days.split(':');
     };
 
-    // TODO: Only allow variable number of days of the week, or ALL, or NONE, or EO. Do not allow combinations of ALL, NONE, EO and days of the week
-    const handleDayChange = (zone, value) => {
-        console.log(value);
-        let newDays;
-        if (Array.isArray(value)) {
-            newDays = value.join(':');
-        } else {
-            newDays = value;
-        }
+    // Handle clicks on the day buttons. Must only allow a combination of days of week OR one of
+    // multiday buttons. 
+    function handleDayChange(zone, value) {
+        console.log(value)
+        // const newDays = value.join(':');
         const newSchedule = schedule.map(s => {
             if (s.zone === zone) {
-                if (newDays === "ALL") {
+                if (value[0] === "ALL") {
                     return { ...s, daysOfWeek: "", multiDay: "ALL" };
-                } else if (newDays === "NONE") {
+                } else if (value[0] === "NONE") {
                     return { ...s, daysOfWeek: "", multiDay: "NONE" };
-                } else if (newDays === "EO") {
+                } else if (value[0] === "EO") {
                     return { ...s, daysOfWeek: "", multiDay: "EO" };
                 } else {
-                    return { ...s, daysOfWeek: newDays, multiDay: "" };
+                    return { ...s, daysOfWeek: value.join(':'), multiDay: "" };
                 }
             }
             return s;
@@ -96,7 +129,7 @@ function ScheduleForm() {
         setSchedule(newSchedule);
     };
 
-    const handleDurationChange = (zone, event) => {
+    function handleDurationChange(zone, event) {
         const newSchedule = schedule.map(s => {
             if (s.zone === zone) {
                 return { ...s, duration: event.target.value };
@@ -106,17 +139,19 @@ function ScheduleForm() {
         setSchedule(newSchedule);
     };
 
-    const handleSubmit = (event) => {
+    function handleSubmit(event) {
         event.preventDefault();
         console.log('Submitted schedule:', schedule);
-        // Here you would typically handle the API call to update the schedule
+        submitMutation.mutate(schedule);
     };
 
-    const handleCancel = () => {
-        // setSchedule(matchedSchedule); // Reset to original schedule
+    // Reset the schedule to the original schedule from the API
+    function handleCancel() {
+        setSchedule(originalSchedule);
     };
 
 
+    // Build a button for every day of the week
     function DayOfWeekButtons({ scheduleItem, index }) {
         return (
             <Form.Group style={{ paddingBottom: '10px' }}>
@@ -131,10 +166,11 @@ function ScheduleForm() {
         );
     }
 
+    // ALL, None, Every Other day buttons
     function MultiDayButtons({ scheduleItem, index }) {
         return (
             <Form.Group>
-                <ToggleButtonGroup type="radio" name={`multiDaySelector-${index}`} defaultValue={defaultDays(scheduleItem.multiDay)} onChange={(value) => handleDayChange(scheduleItem.zone, value)}>
+                <ToggleButtonGroup type="radio" name={`multiDaySelector-${index}`} defaultValue={defaultDays(scheduleItem.multiDay)} onChange={(value) => handleDayChange(scheduleItem.zone, [value])}>
                     <ToggleButton key={"ALL"} id={`all-${index}`} value={"ALL"} variant={scheduleItem.multiDay === "ALL" ? 'outline-success' : 'outline-secondary'}>
                         ALL
                     </ToggleButton>
@@ -142,7 +178,7 @@ function ScheduleForm() {
                         NONE
                     </ToggleButton>
                     <ToggleButton key={"EO"} id={`eo-${index}`} value={"EO"} variant={scheduleItem.multiDay === "EO" ? 'outline-success' : 'outline-secondary'}>
-                        EO
+                        Every Other
                     </ToggleButton>
                 </ToggleButtonGroup>
             </Form.Group>
@@ -150,38 +186,52 @@ function ScheduleForm() {
     }
 
     return (
-        <Form onSubmit={handleSubmit}>
-            <Row>
-                <Col md="3">Zone</Col>
-                <Col md="2">Duration</Col>
-                <Col>Day</Col>
-            </Row>
-            <hr />
-            {schedule.map((s, index) => (
-                <Form.Group as={Row} controlId={`schedule-${index}`} style={{ paddingTop: "10px", paddingBottom: "10px", background: (index % 2 === 0) ? 'white' : '#f2f2f2' }}>
-                    <Col md="2">
-                        <Form.Label column>{s.name}</Form.Label>
-                    </Col>
-                    <Col md="2">
-                        <Form.Group style={{ paddingBottom: "10px" }}>
-                            <Form.Control type="number" defaultValue={s.duration} onChange={(event) => handleDurationChange(s.zone, event)} />
-                        </Form.Group>
-                    </Col>
-                    <Col md="auto">
-                        <DayOfWeekButtons scheduleItem={s} index={index} /> 
-                        <MultiDayButtons scheduleItem={s} index={index} />
-                    </Col>
-                  
-                </Form.Group>
-            ))}
-            <hr />
-            <Button variant="primary" type="submit">
-                Save Changes
-            </Button>
-            <Button variant="secondary" onClick={handleCancel} style={{ marginLeft: '10px' }}>
-                Cancel
-            </Button>
-        </Form>
+        <>
+            <Form style={{ paddingBottom: '20px' }} onSubmit={handleSubmit}>
+                <Row className="d-none d-md-flex">
+                    <Col md="2">Zone</Col>
+                    <Col md="2">Duration</Col>
+                    <Col>Day</Col>
+                </Row>
+                <hr className="d-none d-md-block" />
+                {schedule.map((s, index) => (
+                    <Form.Group as={Row} controlId={`schedule-${index}`} style={{ paddingTop: "10px", paddingBottom: "10px", background: (index % 2 === 0) ? 'white' : '#f2f2f2' }}>
+                        <Col md="2">
+                            <Form.Label column>{s.name}</Form.Label>
+                        </Col>
+                        <Col md="2">
+                            <Form.Group style={{ paddingBottom: "10px" }}>
+                                <Form.Control type="number" defaultValue={s.duration} onChange={(event) => handleDurationChange(s.zone, event)} />
+                            </Form.Group>
+                        </Col>
+                        <Col md="auto">
+                            <DayOfWeekButtons scheduleItem={s} index={index} />
+                            <MultiDayButtons scheduleItem={s} index={index} />
+                        </Col>
+
+                    </Form.Group>
+                ))}
+                <hr />
+                <Button variant="primary" type="submit">
+                    Save Changes
+                </Button>
+                <Button variant="secondary" onClick={handleCancel} style={{ marginLeft: '10px' }}>
+                    Cancel
+                </Button>
+            </Form>
+
+            <Modal show={showAlert} onHide={handleCloseAlert}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Submission Error</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>API Error on Submission</Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleCloseAlert}>
+                        Close
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+        </>
     );
 };
 
