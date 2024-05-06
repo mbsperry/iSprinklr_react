@@ -38,7 +38,6 @@ async function postSchedule(schedule) {
             return { zone: s.zone, day: s.daysOfWeek, duration: s.duration };
         }
     });
-    console.log('Formatted schedule:', formattedSchedule);
     const response = await fetchTimeout(`http://${config.API_SERVER}/api/set_schedule`, 
         { 
             method: 'POST', 
@@ -49,7 +48,11 @@ async function postSchedule(schedule) {
             body: JSON.stringify({ items: formattedSchedule }) 
         });
     if (!response.ok) {
-        throw new Error('Network response was not ok');
+        // Throw custom error with status and message
+        return response.text().then(text => {
+            const message = JSON.parse(text).detail[0].msg;
+            throw ({ status: response.status, message: message });
+        });
     }
     return response.json();
 }
@@ -81,7 +84,7 @@ function ScheduleForm() {
     const daysOfWeek = ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'];
     const [schedule, setSchedule] = useState(ParseSchedule());
     const originalSchedule = ParseSchedule();
-    const [showAlert, setShowAlert] = useState(false);
+    const [alertData, setAlertData] = useState({ show: false, type: '', message: '' });
 
     const queryClient = useQueryClient();
 
@@ -89,15 +92,18 @@ function ScheduleForm() {
         mutationFn: postSchedule,
         onSuccess: () => {
             queryClient.invalidateQueries('schedules');
+            // Display alert with success message
+            setAlertData({ show: true, type: 'Success', message: 'Schedule updated successfully' });
         },
-        onError: () => {
+        onError: (error) => {
             // Display alert with error
-            setShowAlert(true);
+            console.log('Error:', error);
+            setAlertData({ show: true, type: 'Submission Error', message: 'Status ' + error.status + ' Message: ' + error.message });
         }
     });
 
     function handleCloseAlert() {
-        setShowAlert(false);
+        setAlertData({ show: false, type: '', message: '' });
     }
 
     function defaultDays(days) {
@@ -110,8 +116,6 @@ function ScheduleForm() {
     // Handle clicks on the day buttons. Must only allow a combination of days of week OR one of
     // multiday buttons. 
     function handleDayChange(zone, value) {
-        console.log(value)
-        // const newDays = value.join(':');
         const newSchedule = schedule.map(s => {
             if (s.zone === zone) {
                 if (value[0] === "ALL") {
@@ -143,6 +147,7 @@ function ScheduleForm() {
         event.preventDefault();
         console.log('Submitted schedule:', schedule);
         submitMutation.mutate(schedule);
+        // TODO: invalidate queries
     };
 
     // Reset the schedule to the original schedule from the API
@@ -201,7 +206,14 @@ function ScheduleForm() {
                         </Col>
                         <Col md="2">
                             <Form.Group style={{ paddingBottom: "10px" }}>
-                                <Form.Control type="number" defaultValue={s.duration} onChange={(event) => handleDurationChange(s.zone, event)} />
+                                <Form.Control
+                                    required
+                                    type="number"
+                                    placeholder="Duration (min)"
+                                    defaultValue={s.duration} onChange={(event) => handleDurationChange(s.zone, event)}
+                                    min="0"
+                                    max="60"
+                                />
                             </Form.Group>
                         </Col>
                         <Col md="auto">
@@ -220,11 +232,11 @@ function ScheduleForm() {
                 </Button>
             </Form>
 
-            <Modal show={showAlert} onHide={handleCloseAlert}>
+            <Modal show={alertData.show} onHide={handleCloseAlert}>
                 <Modal.Header closeButton>
-                    <Modal.Title>Submission Error</Modal.Title>
+                    <Modal.Title>{alertData.type}</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>API Error on Submission</Modal.Body>
+                <Modal.Body>{alertData.message}</Modal.Body>
                 <Modal.Footer>
                     <Button variant="secondary" onClick={handleCloseAlert}>
                         Close
