@@ -1,4 +1,4 @@
- import '../App.css';
+import '../App.css';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import config from '../config.js';
@@ -14,7 +14,7 @@ function SprinklrSelect({sprinklerList, onChange}) {
   function MakeList() {
     const options = [];
     for (const element of sprinklerList) {
-      options.push(<option value={element.zone}>{element.name}</option>);
+      options.push(<option key={element.name} value={element.zone}>{element.name}</option>);
     }
     return (
       <>
