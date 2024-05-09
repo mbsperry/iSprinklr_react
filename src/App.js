@@ -1,10 +1,8 @@
 import { Routes, Route, Outlet, Link } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient, QueryClientProvider, QueryClient } from '@tanstack/react-query';
+import { useEffect } from "react";
+import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import Container from 'react-bootstrap/Container';
-import Nav from 'react-bootstrap/Nav';
-import Navbar from 'react-bootstrap/Navbar';
-import NavDropdown from 'react-bootstrap/NavDropdown';
+import { Container, Nav, Navbar, NavDropdown } from 'react-bootstrap';
 import Controller from './pages/Controller.js';
 import Scheduler from './pages/Scheduler.js';
 import APILog from './pages/APILog.js';
@@ -14,10 +12,13 @@ import SerialLog from './pages/SerialLog.js';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
-
 const queryClient = new QueryClient();
 
 export default function App() {
+  useEffect(() => {
+    document.title = "iSprinklr";
+  }, []);
+
   return (
       <QueryClientProvider client={queryClient}>
         <Routes>

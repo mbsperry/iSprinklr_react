@@ -234,7 +234,6 @@ function Controller() {
 
   // Fetch the system status and sprinkler data on initial load
   useEffect(() => {
-    document.title = "iSprinklr";
     fetchSystemStatus();
     fetchSprinklerData();
   }, []);
