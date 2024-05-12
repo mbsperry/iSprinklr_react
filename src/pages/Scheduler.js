@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchTimeout } from '../fetchTimeout.js';
 import { useState } from 'react';
-import { Button, Col, Container, Form, Modal, Row, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
+import { Button, Col, Container, Form, Modal, Row, Stack, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
 
 import config from '../config.js';
 
@@ -19,6 +19,14 @@ async function fetchSprinklerList() {
 	const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers`);
 	if (!response.ok) {
 		throw new Error('Error: unable to load sprinkler list');
+	}
+	return response.json();
+}
+
+async function fetchScheduleOnOff() {
+	const response = await fetchTimeout(`http://${config.API_SERVER}/api/get_schedule_on_off`);
+	if (!response.ok) {
+		throw new Error('Error: unable to load schedule on off');
 	}
 	return response.json();
 }
@@ -46,6 +54,22 @@ async function postSchedule(schedule) {
 			const message = JSON.parse(text).detail[0].msg;
 			throw new Error (`Status: ${response.status} Message: ${message}`);
 		});
+	}
+	return response.json();
+}
+
+async function postScheduleOnOff(value) {
+	const response = await fetchTimeout(`http://${config.API_SERVER}/api/set_schedule_on_off`,
+		{
+			method: 'POST',
+			headers: {
+				'Accept': 'application/json',
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ schedule_on_off: value })
+		});
+	if (!response.ok) {
+		throw new Error(`Unable to set schedule on off. Status: ${response.status} Message: ${response.statusText}`);
 	}
 	return response.json();
 }
@@ -79,16 +103,26 @@ function useFetchSchedule() {
 	return { schedule, scheduleError, isLoadingSchedule };
 }
 
+function useFetchScheduleOnOff() {
+	const { data: onOffData, isLoading: isLoadingOnOffData, error: onOffError } = useQuery({ queryKey: ['onOffData'], queryFn: fetchScheduleOnOff });
+	return { onOffData, isLoadingOnOffData, onOffError };
+}
+
 function ScheduleForm() {
 	const daysOfWeek = ['M', 'Tu', 'W', 'Th', 'F', 'Sa', 'Su'];
 	const [schedule, setSchedule] = useState(useFetchSchedule().schedule);
 	const { schedule: originalSchedule } = useFetchSchedule();
 	const [alertData, setAlertData] = useState({ show: false, type: '', message: '' });
+	const [scheduleOnOff, setScheduleOnOff] = useState(useFetchScheduleOnOff().onOffData.schedule_on_off);
 
 	const queryClient = useQueryClient();
 
 	const submitMutation = useMutation({
 		mutationFn: postSchedule,
+	});
+
+	const onOffMutation = useMutation({
+		mutationFn: postScheduleOnOff,
 	});
 
 	function handleCloseAlert() {
@@ -101,6 +135,17 @@ function ScheduleForm() {
 		}
 		return days.split(':');
 	};
+
+	function handleScheduleOnOff(value) {
+		onOffMutation.mutate(value, {
+			onSuccess: (data) => {
+				setScheduleOnOff(value);
+			},
+			onError: (error) => {
+				setAlertData({ show: true, type: 'API Error', message: error.message });
+			}
+		});
+	}	
 
 	// Handle clicks on the day buttons. Must only allow a combination of days of week OR one of
 	// multiday buttons. 
@@ -133,6 +178,13 @@ function ScheduleForm() {
 		});
 		setSchedule(newSchedule);
 	};
+
+	function handleGlobalDurationChange(percent) {
+		const newSchedule = schedule.map(s => {
+			return { ...s, duration: Math.round(s.duration * (percent / 100)) };
+		});
+		setSchedule(newSchedule);
+	}
 
 	// Uses the mutation to submit the schedule via post
 	// On success invalidate 
@@ -192,45 +244,66 @@ function ScheduleForm() {
 
 	return (
 		<>
-			<Form style={{ paddingBottom: '20px' }} onSubmit={handleSubmit}>
+			<Container className='p-4' >
+				<Form>
+					<Stack direction="horizontal" gap={3} className="mx-auto flex-column flex-md-row">
+						<Form.Check
+							type="switch"
+							id="scheduleOnOff"
+							label={`Schedule ${scheduleOnOff ? 'On' : 'Off'}`}
+							checked={scheduleOnOff}
+							onChange={(e) => handleScheduleOnOff(e.target.checked)}
+						/>
+						<Button variant="info" onClick={() => handleGlobalDurationChange(90)}>
+							Decrease All 10%
+						</Button>
+						<Button variant="info" onClick={() => handleGlobalDurationChange(110)}>
+							Increase All 10%
+						</Button>
+					</Stack>
+				</Form>
+			</Container>
+			<Form className='pb-4' onSubmit={handleSubmit}>
 				<Row className="d-none d-md-flex">
 					<Col md="2">Zone</Col>
 					<Col md="2">Duration</Col>
 					<Col>Day</Col>
 				</Row>
 				<hr className="d-none d-md-block" />
-				{schedule.map((s, index) => (
-					<Form.Group as={Row} key={`${s.zone}-formGroup`}controlId={`schedule-${index}`} style={{ paddingTop: "10px", paddingBottom: "10px", background: (index % 2 === 0) ? 'white' : '#f2f2f2' }}>
-						<Col md="2">
-							<Form.Label column>{s.name}</Form.Label>
-						</Col>
-						<Col md="2">
-							<Form.Group style={{ paddingBottom: "10px" }}>
-								<Form.Control
-									required
-									type="number"
-									placeholder="Duration (min)"
-									value={s.duration} 
-									onChange={(event) => handleDurationChange(s.zone, event)}
-									min="0"
-									max="60"
-								/>
-							</Form.Group>
-						</Col>
-						<Col md="auto">
-							<DayOfWeekButtons scheduleItem={s} index={index} />
-							<MultiDayButtons scheduleItem={s} index={index} />
-						</Col>
+				<fieldset disabled={!scheduleOnOff}>
+					{schedule.map((s, index) => (
+						<Form.Group as={Row} key={`${s.zone}-formGroup`} controlId={`schedule-${index}`} className='py-4' style={{ background: (index % 2 === 0) ? 'white' : '#f2f2f2' }}>
+							<Col md="2">
+								<Form.Label column>{s.name}</Form.Label>
+							</Col>
+							<Col md="2">
+								<Form.Group className='mb-4'>
+									<Form.Control
+										required
+										type="number"
+										placeholder="Duration (min)"
+										value={s.duration}
+										onChange={(event) => handleDurationChange(s.zone, event)}
+										min="0"
+										max="60"
+									/>
+								</Form.Group>
+							</Col>
+							<Col md="auto">
+								<DayOfWeekButtons scheduleItem={s} index={index} />
+								<MultiDayButtons scheduleItem={s} index={index} />
+							</Col>
 
-					</Form.Group>
-				))}
-				<hr />
-				<Button variant="primary" type="submit">
-					Save Changes
-				</Button>
-				<Button variant="secondary" onClick={handleCancel} style={{ marginLeft: '10px' }}>
-					Cancel
-				</Button>
+						</Form.Group>
+					))}
+					<hr />
+					<Button variant="primary" type="submit">
+						Save Changes
+					</Button>
+					<Button variant="secondary" onClick={handleCancel} style={{ marginLeft: '10px' }}>
+						Reset Values
+					</Button>
+				</fieldset>
 			</Form>
 
 			<Modal show={alertData.show} onHide={handleCloseAlert}>
@@ -251,16 +324,23 @@ function ScheduleForm() {
 
 function Scheduler() {
 	const { scheduleError, isLoadingSchedule } = useFetchSchedule();
+	const { isLoadingOnOffData, onOffError } = useFetchScheduleOnOff();
 
-	if (isLoadingSchedule) {
+	if (isLoadingSchedule || isLoadingOnOffData) {
 		return <div>Loading...</div>;
 	}
 	if (scheduleError) {
 		return <div>{scheduleError.message}</div>;
 	}
+	if (onOffError) {
+		return <div>{onOffError.message}</div>;
+	}
+	
+	
 	return (
 		<Container>
-			<h2 style={{ paddingTop: '20px', paddingBottom: '20px' }}>Sprinkler Schedule</h2>
+			<h2 className='py-4'>Sprinkler Schedule</h2>
+			
 			<ScheduleForm />
 		</Container>
 	);
