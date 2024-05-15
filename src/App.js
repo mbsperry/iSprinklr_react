@@ -43,7 +43,7 @@ export default function App() {
 function Layout() {
   return (
     <>
-          <Navbar expand="lg" bg="dark" variant="dark" className="bg-body-tertiary">
+          <Navbar expand="lg" variant="dark" className="bg-dark bg-gradient">
               <Container>
                   <Navbar.Brand >iSprinklr</Navbar.Brand>
                   <Navbar.Toggle aria-controls="basic-navbar-nav" />
