@@ -14,6 +14,7 @@ There are 3 components:
 ## Installation
 
 iSprinklr React was built using Create React App, so installation is fairly basic. 
+- Requires a working iSprinklr_api server. 
 - Clone the repository
 - Install dependencies with `npm install`
 - Run the application in development mode with `npm start`
