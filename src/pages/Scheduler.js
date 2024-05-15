@@ -140,6 +140,7 @@ function ScheduleForm() {
 		onOffMutation.mutate(value, {
 			onSuccess: (data) => {
 				setScheduleOnOff(value);
+				queryClient.invalidateQueries('onOffData');
 			},
 			onError: (error) => {
 				setAlertData({ show: true, type: 'API Error', message: error.message });
