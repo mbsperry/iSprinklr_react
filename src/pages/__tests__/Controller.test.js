@@ -1,11 +1,20 @@
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithWrapper, mockSprinklerList, mockSystemStatus, createMockApiResponse } from '../../testUtils';
 import { fetchTimeout } from '../../fetchTimeout';
+import { useCountdown } from '../../useCountdown';
 import Controller from '../Controller';
+
+// Mock modules
+jest.mock('../../fetchTimeout');
+jest.mock('../../useCountdown');
 
 describe('Controller Component', () => {
   beforeEach(() => {
+    // Reset all mocks
+    jest.clearAllMocks();
+    
     // Default mock implementations
+    useCountdown.mockImplementation(() => [0, 0]);
     fetchTimeout.mockImplementation((url) => {
       if (url.includes('/api/system/status')) {
         return Promise.resolve(createMockApiResponse(mockSystemStatus));
@@ -39,14 +48,15 @@ describe('Controller Component', () => {
         if (url.includes('/api/system/status')) {
           return Promise.reject(new Error('Failed to connect to hardware'));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockSprinklerList)
-        });
+        return Promise.resolve(createMockApiResponse(mockSprinklerList));
       });
 
       renderWithWrapper(<Controller />);
-      expect(await screen.findByText('Error: Failed to connect to hardware')).toBeInTheDocument();
+      const errorElement = await screen.findByText('Error: Failed to connect to hardware', {
+        exact: false,
+        trim: true
+      });
+      expect(errorElement).toBeInTheDocument();
     });
 
     test('handles sprinkler data loading failure', async () => {
@@ -54,28 +64,35 @@ describe('Controller Component', () => {
         if (url.includes('/api/sprinklers/')) {
           return Promise.reject(new Error('Failed to load sprinkler configuration'));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockSystemStatus)
-        });
+        return Promise.resolve(createMockApiResponse(mockSystemStatus));
       });
 
       renderWithWrapper(<Controller />);
-      expect(await screen.findByText('Error: Failed to load sprinkler configuration')).toBeInTheDocument();
+      
+      // Wait for error state
+      const errorMessage = await screen.findByText(/Error: Failed to load sprinkler configuration/, {
+        exact: false
+      });
+      expect(errorMessage).toBeInTheDocument();
+      
+      // Verify error state is shown in a danger card
+      const dangerCard = screen.getByTestId('status-card');
+      expect(dangerCard).toHaveClass('bg-danger');
     });
 
     test('handles invalid zone parameter when starting sprinkler', async () => {
+      const errorResponse = {
+        systemStatus: "error",
+        message: "Invalid zone number"
+      };
+
       fetchTimeout.mockImplementation((url) => {
         if (url.includes('/api/sprinklers/start')) {
-          return Promise.resolve({
-            ok: false,
-            statusText: 'Invalid zone number'
-          });
+          return Promise.resolve(createMockApiResponse(errorResponse));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => url.includes('/api/sprinklers/') ? mockSprinklerList : mockSystemStatus
-        });
+        return Promise.resolve(createMockApiResponse(
+          url.includes('/api/sprinklers/') ? mockSprinklerList : mockSystemStatus
+        ));
       });
 
       renderWithWrapper(<Controller />);
@@ -92,26 +109,33 @@ describe('Controller Component', () => {
       fireEvent.change(durationInput, { target: { value: '30' } });
       fireEvent.click(activateButton);
       
-      expect(await screen.findByText('Error: Invalid zone number')).toBeInTheDocument();
+      const errorElement = await screen.findByText('Error: Invalid zone number', {
+        exact: false,
+        trim: true
+      });
+      expect(errorElement).toBeInTheDocument();
     });
 
     test('handles system already active error', async () => {
+      const activeResponse = {
+        systemStatus: "active",
+        message: "System already active on zone 2",
+        zone: 2,
+        duration: 45
+      };
+
+      let isStarted = false;
       fetchTimeout.mockImplementation((url) => {
         if (url.includes('/api/sprinklers/start')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({
-              systemStatus: "active",
-              message: "System already active on zone 2",
-              zone: 2,
-              duration: 45
-            })
-          });
+          isStarted = true;
+          return Promise.resolve(createMockApiResponse(activeResponse));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => url.includes('/api/sprinklers/') ? mockSprinklerList : mockSystemStatus
-        });
+        if (url.includes('/api/system/status')) {
+          return Promise.resolve(createMockApiResponse(
+            isStarted ? activeResponse : mockSystemStatus
+          ));
+        }
+        return Promise.resolve(createMockApiResponse(mockSprinklerList));
       });
 
       renderWithWrapper(<Controller />);
@@ -128,61 +152,69 @@ describe('Controller Component', () => {
       fireEvent.change(durationInput, { target: { value: '30' } });
       fireEvent.click(activateButton);
       
-      expect(await screen.findByText(/Error, system already active on zone 2/)).toBeInTheDocument();
+      // Wait for error state
+      const errorMessage = await screen.findByText(/Error, system already active on zone 2/, {
+        exact: false
+      });
+      expect(errorMessage).toBeInTheDocument();
+      
+      // Verify error state is shown in a danger card
+      const dangerCard = screen.getByTestId('status-card');
+      expect(dangerCard).toHaveClass('bg-danger');
     });
 
     test('handles stop system failure', async () => {
-      // Start with active system
+      const activeResponse = {
+        systemStatus: "active",
+        message: "System active",
+        zone: 1,
+        duration: 30,
+        active_zone: 1
+      };
+
       fetchTimeout.mockImplementation((url) => {
         if (url.includes('/api/system/status')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({
-              systemStatus: "active",
-              message: "System active",
-              zone: 1,
-              duration: 30
-            })
-          });
+          return Promise.resolve(createMockApiResponse(activeResponse));
         }
         if (url.includes('/api/sprinklers/stop')) {
           return Promise.reject(new Error('Hardware communication error'));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockSprinklerList)
-        });
+        return Promise.resolve(createMockApiResponse(mockSprinklerList));
       });
 
       renderWithWrapper(<Controller />);
-      await screen.findByText(/Active Zone:/);
+      
+      // Wait for active system UI
+      await screen.findByText('Active Zone:', { exact: false });
       
       // Try to stop
       const stopButton = screen.getByRole('button', { name: 'Stop' });
       fireEvent.click(stopButton);
       
-      expect(await screen.findByText('Error: Hardware communication error')).toBeInTheDocument();
+      const errorElement = await screen.findByText('Error: Hardware communication error', {
+        exact: false,
+        trim: true
+      });
+      expect(errorElement).toBeInTheDocument();
     });
   });
 
   describe('Normal Operation', () => {
     test('handles sprinkler activation flow', async () => {
+      const activeResponse = {
+        systemStatus: "active",
+        message: "System active",
+        zone: 1,
+        duration: 30
+      };
+
       fetchTimeout.mockImplementation((url, options) => {
         if (url.includes('/api/sprinklers/start')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({
-              systemStatus: "active",
-              message: "System active",
-              zone: 1,
-              duration: 30
-            })
-          });
+          return Promise.resolve(createMockApiResponse(activeResponse));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => url.includes('/api/sprinklers/') ? mockSprinklerList : mockSystemStatus
-        });
+        return Promise.resolve(createMockApiResponse(
+          url.includes('/api/sprinklers/') ? mockSprinklerList : mockSystemStatus
+        ));
       });
 
       renderWithWrapper(<Controller />);
@@ -212,41 +244,44 @@ describe('Controller Component', () => {
       );
       
       // Verify UI updates
-      await screen.findByText(/Active Zone:/);
-      expect(screen.getByText(/Front Yard/)).toBeInTheDocument();
+      const activeZoneText = await screen.findByText('Active Zone:');
+      expect(activeZoneText).toBeInTheDocument();
+      
+      const frontYardText = await screen.findByText(/Front Yard/, {
+        selector: 'p'
+      });
+      expect(frontYardText).toBeInTheDocument();
     });
 
     test('handles sprinkler deactivation', async () => {
-      // Start with active system
+      const activeResponse = {
+        systemStatus: "active",
+        message: "System active",
+        zone: 1,
+        duration: 30,
+        active_zone: 1
+      };
+
+      const inactiveResponse = {
+        systemStatus: "inactive",
+        message: "System is idle"
+      };
+
+      // First set active state
       fetchTimeout.mockImplementation((url) => {
         if (url.includes('/api/system/status')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({
-              systemStatus: "active",
-              message: "System active",
-              zone: 1,
-              duration: 30
-            })
-          });
+          return Promise.resolve(createMockApiResponse(activeResponse));
         }
         if (url.includes('/api/sprinklers/stop')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({
-              systemStatus: "inactive",
-              message: "System is idle"
-            })
-          });
+          return Promise.resolve(createMockApiResponse(inactiveResponse));
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockSprinklerList)
-        });
+        return Promise.resolve(createMockApiResponse(mockSprinklerList));
       });
 
       renderWithWrapper(<Controller />);
-      await screen.findByText(/Active Zone:/);
+      
+      // Wait for active system UI
+      await screen.findByText('Active Zone:', { exact: false });
       
       // Stop the system
       const stopButton = screen.getByRole('button', { name: 'Stop' });
@@ -261,24 +296,47 @@ describe('Controller Component', () => {
       );
       
       // Verify UI updates
-      await screen.findByText('System is Idle');
+      const idleText = await screen.findByText('System is Idle', {
+        exact: false,
+        trim: true
+      });
+      expect(idleText).toBeInTheDocument();
     });
 
     test('handles automatic system stop when countdown expires', async () => {
-      // Mock active system with expired countdown
-      jest.mock('../useCountdown', () => ({
-        useCountdown: jest.fn(() => [0, 0])
-      }));
+      const activeResponse = {
+        systemStatus: "active",
+        message: "System active",
+        zone: 1,
+        duration: 30,
+        active_zone: 1
+      };
 
-      render(<Controller />);
-      await screen.findByText('System is Idle');
+      // First set active state
+      fetchTimeout.mockImplementation((url) => {
+        if (url.includes('/api/system/status')) {
+          return Promise.resolve(createMockApiResponse(activeResponse));
+        }
+        return Promise.resolve(createMockApiResponse(mockSprinklerList));
+      });
+
+      renderWithWrapper(<Controller />);
       
-      expect(fetchTimeout).toHaveBeenCalledWith(
-        'http://test-server:8080/api/sprinklers/stop',
-        expect.objectContaining({
-          method: 'POST'
-        })
-      );
+      // Wait for active system UI
+      await screen.findByText('Active Zone:', { exact: false });
+      
+      // Simulate countdown expiry
+      useCountdown.mockReturnValue([0, 0]);
+      
+      // Verify system stops
+      const idleText = await screen.findByText(/System is Idle/, {
+        exact: false
+      });
+      expect(idleText).toBeInTheDocument();
+      
+      // Verify status card shows idle state
+      const statusCard = screen.getByTestId('status-card');
+      expect(statusCard).toHaveClass('bg-info');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Create a test QueryClient
@@ -13,11 +13,11 @@ export const queryClient = new QueryClient({
 
 // Test wrapper component
 export const TestWrapper = ({ children }) => (
-  <BrowserRouter>
+  <MemoryRouter>
     <QueryClientProvider client={queryClient}>
       {children}
     </QueryClientProvider>
-  </BrowserRouter>
+  </MemoryRouter>
 );
 
 // Custom render function that includes the TestWrapper

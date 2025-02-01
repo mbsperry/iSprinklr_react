@@ -31,11 +31,11 @@ describe('DurationInput Component', () => {
   test('validates minimum duration input', () => {
     renderWithWrapper(<DurationInput {...defaultProps} />);
     
+    const form = screen.getByRole('form');
     const input = screen.getByPlaceholderText('Duration in whole minutes');
-    const submitButton = screen.getByRole('button');
     
     fireEvent.change(input, { target: { value: '0' } });
-    fireEvent.click(submitButton);
+    fireEvent.submit(form);
     
     expect(screen.getByText('Please enter duration in whole minutes only. Max 60 min.')).toBeInTheDocument();
     expect(mockOnStatusChange).not.toHaveBeenCalled();
@@ -44,18 +44,18 @@ describe('DurationInput Component', () => {
   test('validates maximum duration input', () => {
     renderWithWrapper(<DurationInput {...defaultProps} />);
     
+    const form = screen.getByRole('form');
     const input = screen.getByPlaceholderText('Duration in whole minutes');
-    const submitButton = screen.getByRole('button');
     
     fireEvent.change(input, { target: { value: '61' } });
-    fireEvent.click(submitButton);
+    fireEvent.submit(form);
     
     expect(screen.getByText('Please enter duration in whole minutes only. Max 60 min.')).toBeInTheDocument();
     expect(mockOnStatusChange).not.toHaveBeenCalled();
   });
 
   test('accepts valid duration and calls onStatusChange', () => {
-    render(<DurationInput {...defaultProps} />);
+    renderWithWrapper(<DurationInput {...defaultProps} />);
     
     const input = screen.getByPlaceholderText('Duration in whole minutes');
     const submitButton = screen.getByRole('button');

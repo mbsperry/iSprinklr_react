@@ -67,7 +67,7 @@ export function DurationInput({ visible, systemStatus, onStatusChange }) {
   };
 
   return (
-    <Form noValidate validated={validated} onSubmit={handleSubmit}>
+    <Form role="form" noValidate validated={validated} onSubmit={handleSubmit}>
       <Form.Control required type="number" min="1" step="1" max="60" onChange={onChange} placeholder='Duration in whole minutes'></Form.Control>
       <Form.Control.Feedback type="invalid">Please enter duration in whole minutes only. Max 60 min.</Form.Control.Feedback>
       <Button type="submit" variant={buttonColor} className="mt-2">{buttonColor === "primary" ? "Activate!" : "Stop"}</Button>
@@ -137,7 +137,7 @@ export function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate
 
   return (
     <>
-      <Card className={color + " bg-opacity-25"}>
+      <Card data-testid="status-card" className={color + " bg-opacity-25"}>
         <Card.Body>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span> {msg} </span>
