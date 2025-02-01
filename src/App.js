@@ -5,9 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Container, Nav, Navbar, NavDropdown } from 'react-bootstrap';
 import Controller from './pages/Controller.js';
 import Scheduler from './pages/Scheduler.js';
-import APILog from './pages/APILog.js';
-import SchedulerLog from './pages/SchedulerLog.js';
-import SerialLog from './pages/SerialLog.js';
+import Logs from './pages/Logs.js';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
@@ -25,9 +23,7 @@ export default function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Controller />} />
             <Route path="scheduler" element={<Scheduler />} />
-            <Route path="api_log" element={<APILog />} />
-            <Route path="scheduler_log" element={<SchedulerLog />} />
-            <Route path="serial_log" element={<SerialLog />} />
+            <Route path="logs" element={<Logs />} />
 
             {/* Using path="*"" means "match anything", so this route
               acts like a catch-all for URLs that we don't have explicit
@@ -51,11 +47,7 @@ function Layout() {
                       <Nav className="me-auto">
                           <Nav.Link as={Link} to="/">Controller</Nav.Link>
                           <Nav.Link as={Link} to="/scheduler">Scheduler</Nav.Link>
-                          <NavDropdown title="Logs" id="basic-nav-dropdown">
-                              <NavDropdown.Item as={Link} to="/api_log">API Log</NavDropdown.Item>
-                              <NavDropdown.Item as={Link} to="/scheduler_log">Scheduler Log</NavDropdown.Item>
-                              <NavDropdown.Item as={Link} to="/serial_log">Serial Log</NavDropdown.Item>
-                          </NavDropdown>
+                          <Nav.Link as={Link} to="/logs">Logs</Nav.Link>
                       </Nav>
                   </Navbar.Collapse>
               </Container>

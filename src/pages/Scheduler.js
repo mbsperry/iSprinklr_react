@@ -8,67 +8,111 @@ import config from '../config.js';
 
 
 async function fetchSchedule() {
-	const response = await fetchTimeout(`http://${config.API_SERVER}/api/get_schedule`);
+	const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/active`);
 	if (!response.ok) {
+		if (response.status === 422) {
+			const error = await response.json();
+			throw new Error(`Validation Error: ${error.detail[0].msg}`);
+		}
 		throw new Error('Error: unable to load schedule');
 	}
-	return response.json();
+	const data = await response.json();
+	return data.schedule_items || []; // Return just the schedule items array
 }
 
 async function fetchSprinklerList() {
-	const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers`);
+	const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/`);
 	if (!response.ok) {
+		if (response.status === 422) {
+			const error = await response.json();
+			throw new Error(`Validation Error: ${error.detail[0].msg}`);
+		}
 		throw new Error('Error: unable to load sprinkler list');
 	}
 	return response.json();
 }
 
 async function fetchScheduleOnOff() {
-	const response = await fetchTimeout(`http://${config.API_SERVER}/api/get_schedule_on_off`);
+	const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/on_off`);
 	if (!response.ok) {
+		if (response.status === 422) {
+			const error = await response.json();
+			throw new Error(`Validation Error: ${error.detail[0].msg}`);
+		}
 		throw new Error('Error: unable to load schedule on off');
 	}
 	return response.json();
 }
 
 async function postSchedule(schedule) {
-	const formattedSchedule = schedule.map(s => {
-		if (s.daysOfWeek === "") {
-			return { zone: s.zone, day: s.multiDay, duration: s.duration };
-		} else {
-			return { zone: s.zone, day: s.daysOfWeek, duration: s.duration };
-		}
-	});
-	const response = await fetchTimeout(`http://${config.API_SERVER}/api/set_schedule`,
-		{
-			method: 'POST',
+	const formattedSchedule = {
+		schedule_name: "default", // Using default as the schedule name
+		schedule_items: schedule.map(s => ({
+			zone: s.zone,
+			day: s.daysOfWeek === "" ? s.multiDay : s.daysOfWeek,
+			duration: parseInt(s.duration)
+		}))
+	};
+
+	try {
+		// First update/create the schedule
+		const scheduleResponse = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/schedule`, {
+			method: 'PUT', // Use PUT to update existing or create new
 			headers: {
 				'Accept': 'application/json',
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify(formattedSchedule)
 		});
-	if (!response.ok) {
-		// Error handling if post was not successful
-		return response.text().then(text => {
-			const message = JSON.parse(text).detail[0].msg;
-			throw new Error (`Status: ${response.status} Message: ${message}`);
-		});
-	}
-	return response.json();
-}
 
-async function postScheduleOnOff(value) {
-	const response = await fetchTimeout(`http://${config.API_SERVER}/api/set_schedule_on_off`,
-		{
-			method: 'POST',
+		if (!scheduleResponse.ok) {
+			if (scheduleResponse.status === 422) {
+				const error = await scheduleResponse.json();
+				throw new Error(`Validation Error: ${error.detail[0].msg}`);
+			}
+			throw new Error('Failed to update schedule');
+		}
+
+		// Then set it as active
+		const activeResponse = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/active/default`, {
+			method: 'PUT',
 			headers: {
 				'Accept': 'application/json',
 				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ schedule_on_off: value })
+			}
+		});
+
+		if (!activeResponse.ok) {
+			if (activeResponse.status === 422) {
+				const error = await activeResponse.json();
+				throw new Error(`Validation Error: ${error.detail[0].msg}`);
+			}
+			throw new Error('Failed to set schedule as active');
+		}
+
+		return activeResponse.json();
+	} catch (error) {
+		if (error.message.includes('Validation Error')) {
+			throw error;
+		}
+		throw new Error(`Failed to process schedule: ${error.message}`);
+	}
+}
+
+async function postScheduleOnOff(value) {
+	const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/on_off?schedule_on_off=${value}`,
+		{
+			method: 'PUT',
+			headers: {
+				'Accept': 'application/json',
+				'Content-Type': 'application/json'
+			}
 		});
 	if (!response.ok) {
+		if (response.status === 422) {
+			const error = await response.json();
+			throw new Error(`Validation Error: ${error.detail[0].msg}`);
+		}
 		throw new Error(`Unable to set schedule on off. Status: ${response.status} Message: ${response.statusText}`);
 	}
 	return response.json();

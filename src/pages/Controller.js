@@ -171,17 +171,15 @@ function Controller() {
   // Get the system status from the server
   const fetchSystemStatus = async () => {
     try {
-      let res = await fetchTimeout(`http://${config.API_SERVER}/api/status`);
+      let res = await fetchTimeout(`http://${config.API_SERVER}/api/system/status`);
       let data = await handleError(res);
-      // setSystemStatus(data.message);
       if (data.systemStatus === "error") {
         setSystemStatus({"status": "error", "message": data.message});
         return;
       } else if (data.systemStatus === "active") {
         // This happens when the system was already activated somewhere else
-        // Get must set duration timer and current zone (not used, but will generate errors if systemStatus is active and no zone is set)
         onStatusChange(data.duration, "update");
-        setSprinklr(data.zone);
+        setSprinklr(data.active_zone);
       } else {
         // Default
         setSystemStatus({"status": "inactive", "message": "System is idle"});
@@ -196,7 +194,7 @@ function Controller() {
   // Get the list of sprinklers from the server
   const fetchSprinklerData = async () => {
     try {
-      let res = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers`);
+      let res = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/`);
       let data = await handleError(res);
       setSprinklerList(data);
       setLoading(false);
@@ -209,7 +207,16 @@ function Controller() {
 
   const startSprinkler = async (newDuration) => {
     try {
-      let response = await fetchTimeout(`http://${config.API_SERVER}/api/start_sprinklr/${sprinklr}/duration/${newDuration}`);
+      let response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          zone: parseInt(sprinklr),
+          duration: parseInt(newDuration * 60) // Convert minutes to seconds
+        })
+      });
       let data = await handleError(response);
       return data;
     } catch(error) {
@@ -221,7 +228,12 @@ function Controller() {
 
   const stopSprinkler = async () => {
     try {
-      let response = await fetchTimeout(`http://${config.API_SERVER}/api/stop_sprinklr`);
+      let response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       let data = await handleError(response);
       return data;
     } catch(error) {
