@@ -10,7 +10,7 @@ import { Form, InputGroup, Container, Button, Card, Stack } from "react-bootstra
 
 // const API_SERVER = "192.168.88.160:8080";
 
-function SprinklrSelect({sprinklerList, onChange}) {
+export function SprinklrSelect({sprinklerList, onChange}) {
   function MakeList() {
     const options = [];
     for (const element of sprinklerList) {
@@ -34,7 +34,7 @@ function SprinklrSelect({sprinklerList, onChange}) {
   )
 }
 
-function DurationInput({ visible, systemStatus, onStatusChange }) {
+export function DurationInput({ visible, systemStatus, onStatusChange }) {
   const [validated, setValidated] = useState(false);
   const formValue = useRef(null);
   let buttonColor = (systemStatus.status === "active") ? "danger" : "primary";
@@ -75,7 +75,7 @@ function DurationInput({ visible, systemStatus, onStatusChange }) {
   )
 }
 
-function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onStatusChange}) {
+export function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onStatusChange}) {
   // Default is DurationInput is not visible
   let isVisible = false;
 
@@ -98,7 +98,7 @@ function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onS
   )
 }
 
-function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onStatusChange}) {
+export function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onStatusChange}) {
   let color = "bg-info";
   let msg = systemStatus.message;
   const [min,sec] = useCountdown(countDownDate);
