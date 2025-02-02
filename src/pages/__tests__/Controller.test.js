@@ -1,18 +1,14 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders, setupFetchMock } from '../../testUtils';
+import { renderWithProviders } from '../../testUtils';
 import Controller from '../Controller';
+import { server } from '../../mocks/node';
+import { errors } from '../../mocks/handlers';
 
 describe('Controller', () => {
-  let cleanupFetch;
-
-  beforeEach(() => {
-    cleanupFetch = setupFetchMock();
-  });
-
-  afterEach(() => {
-    cleanupFetch();
-  });
+  beforeAll(() => server.listen());
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
 
   test('renders initial state correctly', async () => {
     await renderWithProviders(<Controller />);
@@ -254,39 +250,21 @@ describe('Controller', () => {
   });
 
   describe('error handling', () => {
-    test('handles system status network error', async () => {
-      // Override fetch mock for this test
-      const mockFetch = jest.fn().mockImplementation((url) => {
-        if (url.includes('/api/system/status')) {
-          return Promise.reject(new Error('Failed to fetch system status'));
-        }
-        // Let other requests go through normal mock
-        return global.fetch(url);
-      });
-      global.fetch = mockFetch;
-      
+    test('handles system status error', async () => {
+      server.use(errors.system.status());
       await renderWithProviders(<Controller />);
       
       await waitFor(() => {
-        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to fetch system status');
+        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to get system status, see logs for details');
       });
     });
 
     test('handles sprinkler data fetch error', async () => {
-      // Override fetch mock for this test
-      const mockFetch = jest.fn().mockImplementation((url) => {
-        if (url.includes('/api/sprinklers/') && !url.includes('/start') && !url.includes('/stop')) {
-          return Promise.reject(new Error('Failed to load sprinkler data'));
-        }
-        // Let other requests go through normal mock
-        return global.fetch(url);
-      });
-      global.fetch = mockFetch;
-      
+      server.use(errors.sprinklerList.server());
       await renderWithProviders(<Controller />);
       
       await waitFor(() => {
-        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to load sprinkler data');
+        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to load sprinklers data, see logs for details');
       });
     });
 
@@ -294,15 +272,7 @@ describe('Controller', () => {
       const user = userEvent.setup();
       await renderWithProviders(<Controller />);
       
-      // Override fetch mock after initial render
-      const mockFetch = jest.fn().mockImplementation((url) => {
-        if (url.includes('/api/sprinklers/start')) {
-          return Promise.reject(new Error('Failed to start sprinkler'));
-        }
-        // Let other requests go through normal mock
-        return global.fetch(url);
-      });
-      global.fetch = mockFetch;
+      server.use(errors.startSprinkler.server());
       
       // Select Zone 1 and set duration
       const select = screen.getByRole('combobox');
@@ -315,7 +285,7 @@ describe('Controller', () => {
       await user.click(activateButton);
       
       await waitFor(() => {
-        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to start sprinkler');
+        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Unexpected error starting sprinkler: see logs for details');
       });
     });
 
@@ -331,69 +301,22 @@ describe('Controller', () => {
       const activateButton = screen.getByText('Activate!');
       await user.click(activateButton);
       
-      // Override fetch mock after sprinkler is started
-      const mockFetch = jest.fn().mockImplementation((url) => {
-        if (url.includes('/api/sprinklers/stop')) {
-          return Promise.reject(new Error('Failed to stop sprinkler'));
-        }
-        // Let other requests go through normal mock
-        return global.fetch(url);
-      });
-      global.fetch = mockFetch;
+      // Use error handler for stop request
+      server.use(errors.stopSprinkler.server());
       
       // Try to stop sprinkler
       const stopButton = screen.getByText('Stop');
       await user.click(stopButton);
       
       await waitFor(() => {
-        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to stop sprinkler');
-      });
-    });
-    test('handles system status error response', async () => {
-      // Override fetch mock for this test
-      const mockFetch = jest.fn().mockImplementation((url) => {
-        if (url.includes('/api/system/status')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ 
-              systemStatus: 'error',
-              message: 'Hardware communication error'
-            })
-          });
-        }
-        // Let other requests go through normal mock
-        return global.fetch(url);
-      });
-      global.fetch = mockFetch;
-      
-      await renderWithProviders(<Controller />);
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Hardware communication error');
+        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to stop system, see logs for details');
       });
     });
 
-    test('handles system already active error', async () => {
+    test('handles hardware communication error', async () => {
+      server.use(errors.startSprinkler.hardware());
       const user = userEvent.setup();
       await renderWithProviders(<Controller />);
-      
-      // Override fetch mock after initial render
-      const mockFetch = jest.fn().mockImplementation((url) => {
-        if (url.includes('/api/sprinklers/start')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ 
-              systemStatus: 'error',
-              message: 'Error, system already active on zone 2',
-              zone: 2,
-              duration: 300
-            })
-          });
-        }
-        // Let other requests go through normal mock
-        return global.fetch(url);
-      });
-      global.fetch = mockFetch;
       
       // Select Zone 1 and set duration
       const select = screen.getByRole('combobox');
@@ -406,7 +329,27 @@ describe('Controller', () => {
       await user.click(activateButton);
       
       await waitFor(() => {
-        expect(screen.getByTestId('system-status')).toHaveTextContent('Error, system already active on zone 2');
+        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Hardware communication error: Command Failed');
+      });
+    });
+
+    test('handles system already active error', async () => {
+      server.use(errors.startSprinkler.systemActive());
+      const user = userEvent.setup();
+      await renderWithProviders(<Controller />);
+      
+      // Select Zone 1 and set duration
+      const select = screen.getByRole('combobox');
+      await user.selectOptions(select, '1');
+      const durationInput = screen.getByPlaceholderText('Duration in whole minutes');
+      await user.type(durationInput, '5');
+      
+      // Try to start sprinkler
+      const activateButton = screen.getByText('Activate!');
+      await user.click(activateButton);
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('system-status')).toHaveTextContent('Error: Failed to start zone 2, system already active. Active zone: 1');
       });
     });
   });
