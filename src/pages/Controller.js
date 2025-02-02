@@ -111,13 +111,15 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
     onStatusChange(0, "update");
   }
 
-  if (systemStatus.status === "active") { 
+  if (systemStatus.status === "active") {
     color = "bg-success";
     // msg = `<p>Active Zone: ${sprinklerList[sprinklr - 1].name}<\p>Remaining time: ${formattedMin}:${formattedSec}`;
     msg = (
       <>
-        <p><b>Active Zone:</b> {sprinklerList[sprinklr - 1].name}<br />
-        <b>Remaining time:</b> {formattedMin}:{formattedSec}</p>
+        <p>
+          <b>Active Zone:</b> <span data-testid="active-zone">{sprinklerList[sprinklr - 1].name}</span><br />
+          <b>Remaining time:</b> <span data-testid="remaining-time">{formattedMin}:{formattedSec}</span>
+        </p>
       </>
     );
   } else if (systemStatus.status === "loading") {
@@ -140,7 +142,7 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
       <Card className={color + " bg-opacity-25"}>
         <Card.Body>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span> {msg} </span>
+            <span data-testid="system-status"> {msg} </span>
             {(systemStatus.status === "error") && <Button onClick={handleReset} variant="warning"> Reset </Button>}
           </div>
         </Card.Body>
