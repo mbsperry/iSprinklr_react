@@ -5,12 +5,133 @@ import config from '../config.js';
 import { fetchTimeout } from '../fetchTimeout.js';
 import { useCountdown } from '../useCountdown.js';
 import { useState, useRef, useEffect } from 'react';
-import { Form, InputGroup, Container, Button, Card, Stack } from "react-bootstrap";
+import { Form, InputGroup, Container, Button, Card, Stack, Row, Col } from "react-bootstrap";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+// Functions for the Schedule Controller section
+async function fetchSchedules() {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/schedules`);
+  if (!response.ok) {
+    if (response.status === 422) {
+      const error = await response.json();
+      throw new Error(`Validation Error: ${error.detail[0].msg}`);
+    }
+    throw new Error('Error: unable to load schedules');
+  }
+  return response.json();
+}
+
+async function fetchScheduleOnOff() {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/on_off`);
+  if (!response.ok) {
+    if (response.status === 422) {
+      const error = await response.json();
+      throw new Error(`Validation Error: ${error.detail[0].msg}`);
+    }
+    throw new Error('Error: unable to load schedule on off status');
+  }
+  return response.json();
+}
+
+async function fetchActiveSchedule() {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/active`);
+  if (!response.ok) {
+    if (response.status === 422) {
+      const error = await response.json();
+      throw new Error(`Validation Error: ${error.detail[0].msg}`);
+    }
+    throw new Error('Error: unable to load active schedule');
+  }
+  return response.json();
+}
+
+async function postActiveSchedule(scheduleName) {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/active/${scheduleName}`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
+  });
+  if (!response.ok) {
+    if (response.status === 422) {
+      const error = await response.json();
+      throw new Error(`Validation Error: ${error.detail[0].msg}`);
+    }
+    throw new Error('Error: unable to set active schedule');
+  }
+  return response.json();
+}
+
+async function postScheduleOnOff(value) {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/on_off?schedule_on_off=${value}`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
+  });
+  if (!response.ok) {
+    if (response.status === 422) {
+      const error = await response.json();
+      throw new Error(`Validation Error: ${error.detail[0].msg}`);
+    }
+    throw new Error(`Unable to set schedule on off. Status: ${response.status} Message: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+
+// Query functions for the Sprinkler Controller
+async function fetchSystemStatus() {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/system/status`);
+  if (!response.ok) {
+    throw new Error(response.statusText);
+  }
+  return response.json();
+}
+
+async function fetchSprinklerList() {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/`);
+  if (!response.ok) {
+    throw new Error(response.statusText);
+  }
+  return response.json();
+}
+
+async function startSprinkler({ zone, duration }) {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      zone: parseInt(zone),
+      duration: parseInt(duration * 60) // Convert minutes to seconds
+    })
+  });
+  if (!response.ok) {
+    throw new Error(response.statusText);
+  }
+  return response.json();
+}
+
+async function stopSprinkler() {
+  const response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/stop`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  });
+  if (!response.ok) {
+    throw new Error(response.statusText);
+  }
+  return response.json();
+}
 
 // const API_SERVER = "192.168.88.160:8080";
 
-function SprinklrSelect({sprinklerList, onChange}) {
+function SprinklrSelect({sprinklerList, onChange, value}) {
   function MakeList() {
     const options = [];
     for (const element of sprinklerList) {
@@ -26,7 +147,7 @@ function SprinklrSelect({sprinklerList, onChange}) {
   return (
     <InputGroup>
       <InputGroup.Text>Select Sprinklr</InputGroup.Text>
-        <Form.Select onChange={(e) => onChange(e)}>
+        <Form.Select onChange={(e) => onChange(e)} value={value}>
           <option value="0">None</option>
           {MakeList()}
        </Form.Select>
@@ -88,14 +209,136 @@ function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onS
     <>
       <Card>
         <Card.Body>
-          <Stack gap="2">
-            <SprinklrSelect sprinklerList={sprinklerList} onChange={onSprinklrChange} />
-            <DurationInput visible={isVisible} systemStatus={systemStatus} onStatusChange={onStatusChange}/>
-          </Stack>
+      <Stack gap="2">
+        <SprinklrSelect sprinklerList={sprinklerList} onChange={onSprinklrChange} value={sprinklr} />
+        <DurationInput visible={isVisible} systemStatus={systemStatus} onStatusChange={onStatusChange}/>
+      </Stack>
         </Card.Body>
       </Card>
     </>
   )
+}
+
+// Schedule Controller component
+function ScheduleController() {
+  const queryClient = useQueryClient();
+  
+  // Fetch schedules list
+  const { 
+    data: schedules = [], 
+    error: schedulesError, 
+    isLoading: isLoadingSchedules 
+  } = useQuery({ 
+    queryKey: ['schedules'], 
+    queryFn: fetchSchedules 
+  });
+
+  // Fetch the schedule on/off state
+  const {
+    data: onOffData,
+    error: onOffError,
+    isLoading: isLoadingOnOff
+  } = useQuery({
+    queryKey: ['scheduleOnOff'],
+    queryFn: fetchScheduleOnOff
+  });
+
+  // Fetch the active schedule
+  const {
+    data: activeScheduleData,
+    error: activeScheduleError,
+    isLoading: isLoadingActiveSchedule
+  } = useQuery({
+    queryKey: ['activeSchedule'],
+    queryFn: fetchActiveSchedule
+  });
+
+  // Mutations for changing schedule state
+  const setActiveScheduleMutation = useMutation({
+    mutationFn: postActiveSchedule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activeSchedule'] });
+    }
+  });
+
+  const setScheduleOnOffMutation = useMutation({
+    mutationFn: postScheduleOnOff,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scheduleOnOff'] });
+    }
+  });
+
+  // Handle schedule selection change
+  const handleScheduleChange = (event) => {
+    const scheduleName = event.target.value;
+    setActiveScheduleMutation.mutate(scheduleName);
+  };
+
+  // Handle schedule on/off toggle
+  const handleScheduleOnOff = (event) => {
+    const isOn = event.target.checked;
+    setScheduleOnOffMutation.mutate(isOn);
+  };
+
+  // Get the currently active schedule name
+  const getActiveScheduleName = () => {
+    if (isLoadingActiveSchedule || !activeScheduleData) return "";
+    return activeScheduleData.schedule_name || "";
+  };
+
+  // Is the schedule feature turned on?
+  const isScheduleOn = () => {
+    if (isLoadingOnOff || !onOffData) return false;
+    return onOffData.schedule_on_off || false;
+  };
+
+  if (isLoadingSchedules || isLoadingOnOff || isLoadingActiveSchedule) {
+    return <div>Loading schedule data...</div>;
+  }
+
+  if (schedulesError || onOffError || activeScheduleError) {
+    return (
+      <Card>
+        <Card.Body>
+          <Card.Title>Schedule Controller</Card.Title>
+          <div>Error loading schedule data: {(schedulesError || onOffError || activeScheduleError).message}</div>
+        </Card.Body>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Card.Body>
+        <Card.Title>Schedule Controller</Card.Title>
+        <Stack gap="3">
+          <Form.Check
+            type="switch"
+            id="scheduleOnOff"
+            label={`Schedule ${isScheduleOn() ? 'On' : 'Off'}`}
+            checked={isScheduleOn()}
+            onChange={handleScheduleOnOff}
+          />
+          
+          <Form.Group>
+            <Form.Label>Active Schedule</Form.Label>
+            <Form.Select 
+              value={getActiveScheduleName()} 
+              onChange={handleScheduleChange}
+              disabled={!isScheduleOn()}
+            >
+              <option value="">Select a schedule</option>
+              {schedules.map(schedule => (
+                <option key={schedule.schedule_name} value={schedule.schedule_name}>
+                  {schedule.schedule_name}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </Stack>
+      </Card.Body>
+    </Card>
+  );
 }
 
 function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onStatusChange}) {
@@ -107,16 +350,21 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
   const formattedMin = min.toString().padStart(2, '0');
   const formattedSec = sec.toString().padStart(2, '0');
 
-  if (systemStatus.status === "active" && countDownDate - new Date().getTime() < 0) {
-    onStatusChange(0, "update");
-  }
+  // Use useEffect to handle countdown completion instead of doing it during render
+  useEffect(() => {
+    if (systemStatus.status === "active" && countDownDate - new Date().getTime() < 0) {
+      onStatusChange(0, "update");
+    }
+  }, [systemStatus.status, countDownDate, onStatusChange]);
 
   if (systemStatus.status === "active") { 
     color = "bg-success";
-    // msg = `<p>Active Zone: ${sprinklerList[sprinklr - 1].name}<\p>Remaining time: ${formattedMin}:${formattedSec}`;
+    // Check if sprinklerList has data and the index is valid
+    const zoneName = sprinklerList && sprinklerList[sprinklr - 1] ? sprinklerList[sprinklr - 1].name : `Zone ${sprinklr}`;
+    
     msg = (
       <>
-        <p><b>Active Zone:</b> {sprinklerList[sprinklr - 1].name}<br />
+        <p><b>Active Zone:</b> {zoneName}<br />
         <b>Remaining time:</b> {formattedMin}:{formattedSec}</p>
       </>
     );
@@ -150,154 +398,151 @@ function StatusCard({sprinklerList, sprinklr, systemStatus, countDownDate, onSta
 }
 
 function Controller() {
-  const [duration, setDuration] = useState(0);
+  const queryClient = useQueryClient();
   const [sprinklr, setSprinklr] = useState("0");
-  const [sprinklerList, setSprinklerList] = useState([]);
-  const [systemStatus, setSystemStatus] = useState({"status": "loading", "message": "Waiting for arduino..."});
-  const [isLoading, setLoading] = useState(true);
   const [countDownDate, setCountDownDate] = useState(0);
-  // countDownDate is the end time for the running sprinkler.
-
-
-  // Handle errors thrown by fetch
-  const handleError = response => {
-   if (!response.ok) { 
-      throw Error(response.statusText);
-   } else {
-      return response.json();
-   }
-  };
-
-  // Get the system status from the server
-  const fetchSystemStatus = async () => {
-    try {
-      let res = await fetchTimeout(`http://${config.API_SERVER}/api/system/status`);
-      let data = await handleError(res);
-      if (data.systemStatus === "error") {
-        setSystemStatus({"status": "error", "message": data.message});
-        return;
-      } else if (data.systemStatus === "active") {
-        // This happens when the system was already activated somewhere else
-        onStatusChange(data.duration, "update");
-        setSprinklr(data.active_zone);
-      } else {
-        // Default
-        setSystemStatus({"status": "inactive", "message": "System is idle"});
-        setDuration(0);
-      }
-    } catch(error) {
-      setSystemStatus({"status": "error", "message": error.message});
-      setDuration(-1);
-    };
-  }
-
-  // Get the list of sprinklers from the server
-  const fetchSprinklerData = async () => {
-    try {
-      let res = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/`);
-      let data = await handleError(res);
-      setSprinklerList(data);
-      setLoading(false);
-    } catch (error) {
-      setSystemStatus({ "status": "error", "message": error.message });
-      setDuration(-1);
-      setLoading(false);
-    };
-  }
-
-  const startSprinkler = async (newDuration) => {
-    try {
-      let response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          zone: parseInt(sprinklr),
-          duration: parseInt(newDuration * 60) // Convert minutes to seconds
-        })
-      });
-      let data = await handleError(response);
-      return data;
-    } catch(error) {
-      setSystemStatus({"status": "error", "message": error.message});
-      setDuration(-1);
-      return { "systemStatus": "error", "message": error.message };
-    };
-  }
-
-  const stopSprinkler = async () => {
-    try {
-      let response = await fetchTimeout(`http://${config.API_SERVER}/api/sprinklers/stop`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      let data = await handleError(response);
-      return data;
-    } catch(error) {
-      setSystemStatus({"status": "error", "message": error.message});
-      setDuration(-1);
-      return { "systemStatus": "error", "message": error.message };
-    };
-  }
+  const [duration, setDuration] = useState(0);
   
+  // Fetch the system status
+  const { 
+    data: systemStatusData,
+    error: systemStatusError,
+    isLoading: isLoadingSystemStatus
+  } = useQuery({
+    queryKey: ['systemStatus'],
+    queryFn: fetchSystemStatus,
+    refetchInterval: 10000 // Refetch every 10 seconds to keep status updated
+  });
 
-  // Fetch the system status and sprinkler data on initial load
+  // Use effect to track system status changes coming from outside
   useEffect(() => {
-    fetchSystemStatus();
-    fetchSprinklerData();
-  }, []);
+    if (systemStatusData) {
+      if (systemStatusData.systemStatus === "active") {
+        // System is active - could be activated elsewhere
+        console.log("System active detected - zone:", systemStatusData.active_zone);
+        
+        // Update sprinklr selection to match active zone
+        if (sprinklr !== systemStatusData.active_zone.toString()) {
+          console.log("Updating sprinklr to", systemStatusData.active_zone);
+          setSprinklr(systemStatusData.active_zone.toString());
+        }
+        
+        // Calculate proper end time
+        const endTime = new Date().getTime() + (systemStatusData.duration * 1000);
+        
+        // Only update if the time has changed significantly or if no timer is running
+        if (Math.abs(countDownDate - endTime) > 10000 || countDownDate === 0) {
+          console.log("Updating countdown to", systemStatusData.duration, "seconds");
+          setCountDownDate(endTime);
+          setDuration(Math.round(systemStatusData.duration / 60)); // Convert to minutes
+        }
+      } else if (systemStatusData.systemStatus === "inactive" && duration > 0) {
+        // System was active but now inactive - shut down UI state
+        console.log("System became inactive - resetting state");
+        setDuration(0);
+        setCountDownDate(0);
+      }
+    }
+  }, [systemStatusData, countDownDate, sprinklr, duration]);
 
+  // Fetch the sprinkler list
+  const {
+    data: sprinklerList = [],
+    error: sprinklerListError,
+    isLoading: isLoadingSprinklerList
+  } = useQuery({
+    queryKey: ['sprinklerList'],
+    queryFn: fetchSprinklerList
+  });
+
+  // Mutations for starting and stopping sprinklers
+  const startSprinklerMutation = useMutation({
+    mutationFn: startSprinkler,
+    onSuccess: (response, variables) => {
+      console.log("API response: " + response.message);
+      if (response.systemStatus === "error") {
+        return;
+      } else if (response.systemStatus === "active" && response.zone !== parseInt(sprinklr)) {
+        setDuration(response.duration);
+        setCountDownDate(new Date().getTime() + response.duration * 1000);
+        return;
+      }
+      // Use the variables.duration that was passed to the mutation
+      setDuration(variables.duration);
+      setCountDownDate(new Date().getTime() + variables.duration * 60000);
+      queryClient.invalidateQueries({ queryKey: ['systemStatus'] });
+    },
+    onError: (error) => {
+      console.error("Error starting sprinkler:", error);
+    }
+  });
+
+  const stopSprinklerMutation = useMutation({
+    mutationFn: stopSprinkler,
+    onSuccess: (response) => {
+      console.log("API response: " + response.message);
+      if (response.systemStatus !== "error") {
+        setDuration(0);
+        setCountDownDate(0);
+        queryClient.invalidateQueries({ queryKey: ['systemStatus'] });
+      }
+    },
+    onError: (error) => {
+      console.error("Error stopping sprinkler:", error);
+    }
+  });
 
   function onSprinklrChange(e) {
     setSprinklr(e.target.value);
   }
 
-  // Handle system status changes, triggered when the user clicks the activate button, or when the countdown timer reaches zero
-  // Also triggered if initial page load returns an active system
-  function onStatusChange(newDuration, action) {
+  // Get the current system status
+  const getSystemStatus = () => {
+    if (isLoadingSystemStatus) {
+      return { "status": "loading", "message": "Waiting for arduino..." };
+    }
+    
+    if (systemStatusError) {
+      return { "status": "error", "message": systemStatusError.message };
+    }
+    
+    if (!systemStatusData) {
+      return { "status": "loading", "message": "No system status data" };
+    }
+    
+    if (systemStatusData.systemStatus === "error") {
+      return { "status": "error", "message": systemStatusData.message };
+    }
+    
+    if (systemStatusData.systemStatus === "active") {
+      return { "status": "active", "message": "System active" };
+    }
+    
+    return { "status": "inactive", "message": "System is idle" };
+  };
+
+  // Handle system status changes, triggered when the user clicks the activate button, 
+  // when the countdown timer reaches zero, or on initial load
+  function handleStatusChange(newDuration, action) {
     if (action === "start") {
-      startSprinkler(newDuration).then((response) => {
-        console.log("API response: " + response.message);
-        if ( response.systemStatus === "error" ) {
-          setSystemStatus({"message": response.message, "status": "error"});
-          setDuration(-1);
-          return;
-        } else if (response.systemStatus === "active" && response.zone !== sprinklr) {
-          setSystemStatus({"status": "active", "message": "Error, system already active on zone " + response.zone});
-          setDuration(response.duration);
-          setCountDownDate(new Date().getTime() + newDuration * 60000);
-          return;
-        } 
-        setDuration(newDuration);
-        setSystemStatus({"status": "active", "message": "System active"}); 
-        setCountDownDate(new Date().getTime() + newDuration * 60000);
-      });
+      // Start a new sprinkler
+      startSprinklerMutation.mutate({ zone: sprinklr, duration: newDuration });
     } else if (action === "stop") {
-      stopSprinkler().then((response) => {
-        console.log("API response: " + response.message);
-        if ( response.systemStatus === "error" ) {
-          setSystemStatus({"status": "error", "message": response.message});
-          setDuration(-1);
-          return;
-        } else {
-          setDuration(0);
-          setSystemStatus({"status": "inactive", "message": "System is idle"});
-          setCountDownDate(0);
-        }
-      });
+      // Stop the current sprinkler
+      stopSprinklerMutation.mutate();
     } else if (action === "update" && newDuration > 0) {
+      // Update the countdown timer
       setCountDownDate(new Date().getTime() + newDuration * 1000);
       setDuration(newDuration);
-      setSystemStatus({"status": "active", "message": "System active"});
     } else if (action === "update" && newDuration === 0) {
+      // Reset everything
       setDuration(0);
-      setSystemStatus({"status": "inactive", "message": "System is idle"});
       setCountDownDate(0);
-    } 
+    }
   }
+
+  const systemStatus = getSystemStatus();
+  const isLoading = isLoadingSystemStatus || isLoadingSprinklerList;
 
   if (isLoading) {
     return <div className="App">Loading...</div>;
@@ -306,10 +551,17 @@ function Controller() {
     <Container>
       <h1>###iSprinklr###</h1>
       <p>React based Sprinklr control</p>
-      <Stack gap="2">
-        <InputCard sprinklerList={sprinklerList} systemStatus={systemStatus} sprinklr={sprinklr} onSprinklrChange={onSprinklrChange} onStatusChange={onStatusChange}/>
-        <StatusCard sprinklerList={sprinklerList} duration={duration} sprinklr={sprinklr} systemStatus={systemStatus} countDownDate={countDownDate} onStatusChange={onStatusChange}/>
+      
+      {/* Sprinkler Controller Section */}
+      <h2 className="mt-4 mb-3">Sprinkler Control</h2>
+      <Stack gap="2" className="mb-4">
+        <InputCard sprinklerList={sprinklerList} systemStatus={systemStatus} sprinklr={sprinklr} onSprinklrChange={onSprinklrChange} onStatusChange={handleStatusChange}/>
+        <StatusCard sprinklerList={sprinklerList} duration={duration} sprinklr={sprinklr} systemStatus={systemStatus} countDownDate={countDownDate} onStatusChange={handleStatusChange}/>
       </Stack>
+      
+      {/* Schedule Controller Section */}
+      <h2 className="mt-4 mb-3">Schedule Control</h2>
+      <ScheduleController />
     
     </Container>
   );
