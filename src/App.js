@@ -6,6 +6,7 @@ import { Container, Nav, Navbar, NavDropdown } from 'react-bootstrap';
 import Controller from './pages/Controller.js';
 import Scheduler from './pages/Scheduler.js';
 import Logs from './pages/Logs.js';
+import Status from './pages/Status.js';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
@@ -24,6 +25,7 @@ export default function App() {
             <Route index element={<Controller />} />
             <Route path="scheduler" element={<Scheduler />} />
             <Route path="logs" element={<Logs />} />
+            <Route path="status" element={<Status />} />
 
             {/* Using path="*"" means "match anything", so this route
               acts like a catch-all for URLs that we don't have explicit
@@ -48,6 +50,7 @@ function Layout() {
                           <Nav.Link as={Link} to="/">Controller</Nav.Link>
                           <Nav.Link as={Link} to="/scheduler">Scheduler</Nav.Link>
                           <Nav.Link as={Link} to="/logs">Logs</Nav.Link>
+                          <Nav.Link as={Link} to="/status">Status</Nav.Link>
                       </Nav>
                   </Navbar.Collapse>
               </Container>
