@@ -129,9 +129,8 @@ async function stopSprinkler() {
   return response.json();
 }
 
-// const API_SERVER = "192.168.88.160:8080";
 
-function SprinklrSelect({sprinklerList, onChange, value}) {
+function SprinklrSelect({sprinklerList, onChange, value, disabled}) {
   function MakeList() {
     const options = [];
     for (const element of sprinklerList) {
@@ -147,7 +146,11 @@ function SprinklrSelect({sprinklerList, onChange, value}) {
   return (
     <InputGroup>
       <InputGroup.Text>Select Sprinklr</InputGroup.Text>
-        <Form.Select onChange={(e) => onChange(e)} value={value}>
+        <Form.Select 
+          onChange={(e) => onChange(e)} 
+          value={value}
+          disabled={disabled}
+        >
           <option value="0">None</option>
           {MakeList()}
        </Form.Select>
@@ -155,7 +158,7 @@ function SprinklrSelect({sprinklerList, onChange, value}) {
   )
 }
 
-function DurationInput({ visible, systemStatus, onStatusChange }) {
+function DurationInput({ visible, systemStatus, onStatusChange, isLoading }) {
   const [validated, setValidated] = useState(false);
   const formValue = useRef(null);
   let buttonColor = (systemStatus.status === "active") ? "danger" : "primary";
@@ -175,10 +178,8 @@ function DurationInput({ visible, systemStatus, onStatusChange }) {
     e.preventDefault();
     if (buttonColor === "primary" && systemStatus.status === "inactive") {
       onStatusChange(formValue.current, "start");
-      buttonColor = 'danger';
     } else {
       onStatusChange(0, "stop");
-      buttonColor = 'primary';
     }
   };
   
@@ -189,14 +190,30 @@ function DurationInput({ visible, systemStatus, onStatusChange }) {
 
   return (
     <Form noValidate validated={validated} onSubmit={handleSubmit}>
-      <Form.Control required type="number" min="1" step="1" max="60" onChange={onChange} placeholder='Duration in whole minutes'></Form.Control>
+      <Form.Control 
+        required 
+        type="number" 
+        min="1" 
+        step="1" 
+        max="60" 
+        onChange={onChange} 
+        placeholder='Duration in whole minutes'
+        disabled={isLoading}
+      />
       <Form.Control.Feedback type="invalid">Please enter duration in whole minutes only. Max 60 min.</Form.Control.Feedback>
-      <Button type="submit" variant={buttonColor} className="mt-2">{buttonColor === "primary" ? "Activate!" : "Stop"}</Button>
+      <Button 
+        type="submit" 
+        variant={isLoading ? "secondary" : buttonColor} 
+        className="mt-2" 
+        disabled={isLoading}
+      >
+        {buttonColor === "primary" ? "Activate!" : "Stop"}
+      </Button>
     </Form>
   )
 }
 
-function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onStatusChange}) {
+function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onStatusChange, isLoading}) {
   // Default is DurationInput is not visible
   let isVisible = false;
 
@@ -210,8 +227,18 @@ function InputCard({sprinklerList, systemStatus, sprinklr, onSprinklrChange, onS
       <Card>
         <Card.Body>
       <Stack gap="2">
-        <SprinklrSelect sprinklerList={sprinklerList} onChange={onSprinklrChange} value={sprinklr} />
-        <DurationInput visible={isVisible} systemStatus={systemStatus} onStatusChange={onStatusChange}/>
+        <SprinklrSelect 
+          sprinklerList={sprinklerList} 
+          onChange={onSprinklrChange} 
+          value={sprinklr} 
+          disabled={isLoading}
+        />
+        <DurationInput 
+          visible={isVisible} 
+          systemStatus={systemStatus} 
+          onStatusChange={onStatusChange}
+          isLoading={isLoading}
+        />
       </Stack>
         </Card.Body>
       </Card>
@@ -543,6 +570,9 @@ function Controller() {
 
   const systemStatus = getSystemStatus();
   const isLoading = isLoadingSystemStatus || isLoadingSprinklerList;
+  
+  // Track mutation loading states for button disabling
+  const isMutationLoading = startSprinklerMutation.isPending || stopSprinklerMutation.isPending;
 
   if (isLoading) {
     return <div className="App">Loading...</div>;
@@ -555,8 +585,22 @@ function Controller() {
       {/* Sprinkler Controller Section */}
       <h2 className="mt-4 mb-3">Sprinkler Control</h2>
       <Stack gap="2" className="mb-4">
-        <InputCard sprinklerList={sprinklerList} systemStatus={systemStatus} sprinklr={sprinklr} onSprinklrChange={onSprinklrChange} onStatusChange={handleStatusChange}/>
-        <StatusCard sprinklerList={sprinklerList} duration={duration} sprinklr={sprinklr} systemStatus={systemStatus} countDownDate={countDownDate} onStatusChange={handleStatusChange}/>
+        <InputCard 
+          sprinklerList={sprinklerList} 
+          systemStatus={systemStatus} 
+          sprinklr={sprinklr} 
+          onSprinklrChange={onSprinklrChange} 
+          onStatusChange={handleStatusChange}
+          isLoading={isMutationLoading}
+        />
+        <StatusCard 
+          sprinklerList={sprinklerList} 
+          duration={duration} 
+          sprinklr={sprinklr} 
+          systemStatus={systemStatus} 
+          countDownDate={countDownDate} 
+          onStatusChange={handleStatusChange}
+        />
       </Stack>
       
       {/* Schedule Controller Section */}
