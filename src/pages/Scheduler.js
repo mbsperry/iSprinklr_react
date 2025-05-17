@@ -99,25 +99,6 @@ async function postSchedule(schedule) {
 	}
 }
 
-async function postScheduleOnOff(value) {
-	const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/on_off?schedule_on_off=${value}`,
-		{
-			method: 'PUT',
-			headers: {
-				'Accept': 'application/json',
-				'Content-Type': 'application/json'
-			}
-		});
-	if (!response.ok) {
-		if (response.status === 422) {
-			const error = await response.json();
-			throw new Error(`Validation Error: ${error.detail[0].msg}`);
-		}
-		throw new Error(`Unable to set schedule on off. Status: ${response.status} Message: ${response.statusText}`);
-	}
-	return response.json();
-}
-
 // Parse the schedule from the API into a format that is easier to use in the form
 function useFetchSchedule() {
 	const { data: scheduleData, error: scheduleError, isLoading: isLoadingSchedule } = useQuery({ queryKey: ['schedules'], queryFn: fetchSchedule });
@@ -134,14 +115,17 @@ function useFetchSchedule() {
 	// allow either:or logic later on
 	const schedule = scheduleData.map((schedule) => {
 		const matchedSprinkler = sprinklerList.find((sprinkler) => sprinkler.zone === schedule.zone);
+		// Use a default name if no matching sprinkler is found
+		const sprinklerName = matchedSprinkler ? matchedSprinkler.name : `Zone ${schedule.zone}`;
+		
 		if (schedule.day === "ALL") {
-			return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: "", multiDay: "ALL" };
+			return { zone: schedule.zone, duration: schedule.duration, name: sprinklerName, daysOfWeek: "", multiDay: "ALL" };
 		} else if (schedule.day === "NONE") {
-			return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: "", multiDay: "NONE" };
+			return { zone: schedule.zone, duration: schedule.duration, name: sprinklerName, daysOfWeek: "", multiDay: "NONE" };
 		} else if (schedule.day === "EO") {
-			return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: "", multiDay: "EO" };
+			return { zone: schedule.zone, duration: schedule.duration, name: sprinklerName, daysOfWeek: "", multiDay: "EO" };
 		} else {
-			return { zone: schedule.zone, duration: schedule.duration, name: matchedSprinkler.name, daysOfWeek: schedule.day, multiDay: "" };
+			return { zone: schedule.zone, duration: schedule.duration, name: sprinklerName, daysOfWeek: schedule.day, multiDay: "" };
 		}
 	});
 	return { schedule, scheduleError, isLoadingSchedule };
@@ -157,16 +141,11 @@ function ScheduleForm() {
 	const [schedule, setSchedule] = useState(useFetchSchedule().schedule);
 	const { schedule: originalSchedule } = useFetchSchedule();
 	const [alertData, setAlertData] = useState({ show: false, type: '', message: '' });
-	const [scheduleOnOff, setScheduleOnOff] = useState(useFetchScheduleOnOff().onOffData.schedule_on_off);
-
+	
 	const queryClient = useQueryClient();
 
 	const submitMutation = useMutation({
 		mutationFn: postSchedule,
-	});
-
-	const onOffMutation = useMutation({
-		mutationFn: postScheduleOnOff,
 	});
 
 	function handleCloseAlert() {
@@ -174,23 +153,11 @@ function ScheduleForm() {
 	}
 
 	function defaultDays(days) {
-		if (days === null) {
+		if (!days) {
 			return [];
 		}
 		return days.split(':');
 	};
-
-	function handleScheduleOnOff(value) {
-		onOffMutation.mutate(value, {
-			onSuccess: (data) => {
-				setScheduleOnOff(value);
-				queryClient.invalidateQueries('onOffData');
-			},
-			onError: (error) => {
-				setAlertData({ show: true, type: 'API Error', message: error.message });
-			}
-		});
-	}	
 
 	// Handle clicks on the day buttons. Must only allow a combination of days of week OR one of
 	// multiday buttons. 
@@ -259,7 +226,12 @@ function ScheduleForm() {
 			<Form.Group style={{ paddingBottom: '10px' }}>
 				<ToggleButtonGroup type="checkbox" name={`dayOfWeek-${index}`} defaultValue={defaultDays(scheduleItem.daysOfWeek)} onChange={(value) => handleDayChange(scheduleItem.zone, value)}>
 					{daysOfWeek.map(day => (
-						<ToggleButton key={`${day}-${scheduleItem.zone}`} id={`toggle-${day}-${index}`} value={day} variant={scheduleItem.daysOfWeek.includes(day) ? 'outline-success' : 'outline-secondary'}>
+						<ToggleButton 
+							key={`${day}-${scheduleItem.zone}`} 
+							id={`toggle-${day}-${index}`} 
+							value={day} 
+							variant={scheduleItem.daysOfWeek && scheduleItem.daysOfWeek.includes(day) ? 'outline-success' : 'outline-secondary'}
+						>
 							{day}
 						</ToggleButton>
 					))}
@@ -273,13 +245,28 @@ function ScheduleForm() {
 		return (
 			<Form.Group>
 				<ToggleButtonGroup type="radio" name={`multiDaySelector-${index}`} defaultValue={defaultDays(scheduleItem.multiDay)} onChange={(value) => handleDayChange(scheduleItem.zone, [value])}>
-					<ToggleButton key={"ALL"} id={`all-${index}`} value={"ALL"} variant={scheduleItem.multiDay === "ALL" ? 'outline-success' : 'outline-secondary'}>
+					<ToggleButton 
+						key={"ALL"} 
+						id={`all-${index}`} 
+						value={"ALL"} 
+						variant={scheduleItem.multiDay === "ALL" ? 'outline-success' : 'outline-secondary'}
+					>
 						ALL
 					</ToggleButton>
-					<ToggleButton key={"NONE"} id={`none-${index}`} value={"NONE"} variant={scheduleItem.multiDay === "NONE" ? 'outline-success' : 'outline-secondary'}>
+					<ToggleButton 
+						key={"NONE"} 
+						id={`none-${index}`} 
+						value={"NONE"} 
+						variant={scheduleItem.multiDay === "NONE" ? 'outline-success' : 'outline-secondary'}
+					>
 						NONE
 					</ToggleButton>
-					<ToggleButton key={"EO"} id={`eo-${index}`} value={"EO"} variant={scheduleItem.multiDay === "EO" ? 'outline-success' : 'outline-secondary'}>
+					<ToggleButton 
+						key={"EO"} 
+						id={`eo-${index}`} 
+						value={"EO"} 
+						variant={scheduleItem.multiDay === "EO" ? 'outline-success' : 'outline-secondary'}
+					>
 						Every Other
 					</ToggleButton>
 				</ToggleButtonGroup>
@@ -292,13 +279,6 @@ function ScheduleForm() {
 			<Container className='p-4' >
 				<Form>
 					<Stack direction="horizontal" gap={3} className="mx-auto flex-column flex-md-row">
-						<Form.Check
-							type="switch"
-							id="scheduleOnOff"
-							label={`Schedule ${scheduleOnOff ? 'On' : 'Off'}`}
-							checked={scheduleOnOff}
-							onChange={(e) => handleScheduleOnOff(e.target.checked)}
-						/>
 						<Button variant="info" onClick={() => handleGlobalDurationChange(90)}>
 							Decrease All 10%
 						</Button>
@@ -315,7 +295,7 @@ function ScheduleForm() {
 					<Col>Day</Col>
 				</Row>
 				<hr className="d-none d-md-block" />
-				<fieldset disabled={!scheduleOnOff}>
+				<fieldset>
 					{schedule.map((s, index) => (
 						<Form.Group as={Row} key={`${s.zone}-formGroup`} controlId={`schedule-${index}`} className='py-4' style={{ background: (index % 2 === 0) ? 'white' : '#f2f2f2' }}>
 							<Col md="2">

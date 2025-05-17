@@ -37,3 +37,6 @@ For a complete setup of the iSprinklr system:
 
 ## Credit
 iSprinklr_esp relies on the HunterRoam library from ecodina (https://github.com/ecodina/hunter-wifi) to control the Hunter Pro-c.
+
+TODOs:
+* Fix the schedule editor to allow editing multiple schedules

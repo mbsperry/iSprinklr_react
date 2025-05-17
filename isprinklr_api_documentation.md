@@ -102,6 +102,67 @@ or `null` if no schedule has been run.
 **Possible Errors**:
 - `500 Internal Server Error`: "Failed to get last schedule run status, see logs for details"
 
+### Get API Configuration
+
+Get the current API configuration settings.
+
+**Endpoint**: `GET /api/system/config`
+
+**Parameters**: None
+
+**Returns**:
+```json
+{
+  "ESP_controller_IP": "192.168.88.24",
+  "domain": "127.0.0.1",
+  "dummy_mode": "True",
+  "schedule_on_off": "True",
+  "log_level": "DEBUG"
+}
+```
+
+**Possible Errors**:
+- `500 Internal Server Error`: "Failed to get API configuration, see logs for details"
+
+### Update API Configuration
+
+Update the API configuration settings.
+
+**Endpoint**: `PUT /api/system/config`
+
+**Parameters**:
+```json
+{
+  "ESP_controller_IP": "192.168.88.24",
+  "domain": "127.0.0.1",
+  "dummy_mode": "True",
+  "schedule_on_off": "True",
+  "log_level": "DEBUG"
+}
+```
+
+**Field Validation**:
+- `ESP_controller_IP`: Must be a valid IP address
+- `domain`: Domain address for the API server
+- `dummy_mode`: Must be either "True" or "False" (case insensitive)
+- `schedule_on_off`: Must be either "True" or "False" (case insensitive)
+- `log_level`: Must be one of: "DEBUG", "INFO", "WARNING", "WARN", "ERROR", "CRITICAL", "FATAL" (case insensitive, stored as uppercase)
+
+**Returns**:
+```json
+{
+  "ESP_controller_IP": "192.168.88.24",
+  "domain": "127.0.0.1",
+  "dummy_mode": "True",
+  "schedule_on_off": "True",
+  "log_level": "DEBUG"
+}
+```
+
+**Possible Errors**:
+- `400 Bad Request`: "Invalid configuration: [validation error details]"
+- `500 Internal Server Error`: "Failed to update API configuration: [error details]"
+
 ---
 
 ## Sprinkler Endpoints

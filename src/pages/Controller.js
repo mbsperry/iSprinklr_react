@@ -354,9 +354,14 @@ function ScheduleController() {
               onChange={handleScheduleChange}
               disabled={!isScheduleOn()}
             >
-              <option value="">Select a schedule</option>
-              {schedules.map(schedule => (
-                <option key={schedule.schedule_name} value={schedule.schedule_name}>
+              {/* Add test id to placeholder option for debugging */}
+              <option data-testid="placeholder-option" key="select-placeholder" value="">Select a schedule</option>
+              {schedules.map((schedule, index) => (
+                <option
+                  data-testid={`schedule-option-${index}`}
+                  key={`schedule-${schedule.schedule_name || index}`}
+                  value={schedule.schedule_name}
+                >
                   {schedule.schedule_name}
                 </option>
               ))}
