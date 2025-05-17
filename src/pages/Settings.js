@@ -124,7 +124,14 @@ function Settings() {
                 {Object.entries(apiConfig).map(([key, value]) => {
                   // Handle dummy_mode and schedule_on_off as switches
                   if (key === 'dummy_mode' || key === 'schedule_on_off') {
-                    const isChecked = value.toLowerCase() === 'true';
+                    // Ensure value is a string before calling toLowerCase, or handle boolean true directly.
+                    // Default to false if value is null, undefined, or not 'true' (string) or true (boolean).
+                    let isChecked = false;
+                    if (typeof value === 'string') {
+                      isChecked = value.toLowerCase() === 'true';
+                    } else if (typeof value === 'boolean') {
+                      isChecked = value;
+                    }
                     
                     // Format the label to be more readable
                     const formattedLabel = key === 'dummy_mode' 
