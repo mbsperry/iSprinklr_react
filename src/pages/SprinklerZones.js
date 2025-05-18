@@ -36,15 +36,33 @@ function SprinklerZones() {
   const { 
     data: sprinklerZones = [], 
     isLoading, 
-    error
+    error,
+    isSuccess
   } = useQuery({
     queryKey: ['sprinklerZones'],
     queryFn: fetchSprinklerZones,
     onSuccess: (data) => {
-      setEditingZones(JSON.parse(JSON.stringify(data)));
-      setOriginalZones(JSON.parse(JSON.stringify(data)));
-    }
+      const zonesArray = Array.isArray(data) ? data : [];
+      setEditingZones(JSON.parse(JSON.stringify(zonesArray)));
+      setOriginalZones(JSON.parse(JSON.stringify(zonesArray)));
+    },
+    // Ensure we always get fresh data
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    retry: 2
   });
+
+  // Effect to sync component state with query data
+  React.useEffect(() => {
+    if (isSuccess && sprinklerZones) {
+      const zonesArray = Array.isArray(sprinklerZones) ? sprinklerZones : [];
+      
+      if (zonesArray.length > 0 && editingZones.length === 0) {
+        setEditingZones(JSON.parse(JSON.stringify(zonesArray)));
+        setOriginalZones(JSON.parse(JSON.stringify(zonesArray)));
+      }
+    }
+  }, [isSuccess, sprinklerZones, editingZones.length]);
 
   // Mutation for updating sprinkler zones
   const updateZonesMutation = useMutation({
@@ -52,9 +70,15 @@ function SprinklerZones() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['sprinklerZones'] });
       setAlert({ show: true, variant: 'success', message: 'Sprinkler zones updated successfully!' });
+      
       // Update original zones with the latest data
       if (data && data.zones) {
-        setOriginalZones(JSON.parse(JSON.stringify(data.zones)));
+        const zonesArray = Array.isArray(data.zones) ? data.zones : [];
+        setOriginalZones(JSON.parse(JSON.stringify(zonesArray)));
+        setEditingZones(JSON.parse(JSON.stringify(zonesArray)));
+      } else {
+        // Refresh the data from the server since we can't use the response directly
+        queryClient.fetchQuery({ queryKey: ['sprinklerZones'] });
       }
     },
     onError: (error) => {
@@ -196,21 +220,6 @@ function SprinklerZones() {
         </Card.Footer>
       </Card>
 
-      <Card>
-        <Card.Header>
-          <h5 className="mb-0">About Sprinkler Zones</h5>
-        </Card.Header>
-        <Card.Body>
-          <p>
-            Sprinkler zones allow you to configure different areas of your garden or lawn that are controlled by the system.
-            Each zone represents a separate valve or section of your irrigation system.
-          </p>
-          <p>
-            Configure meaningful names for each zone to make it easier to identify them when creating schedules or manually
-            controlling your sprinkler system.
-          </p>
-        </Card.Body>
-      </Card>
     </Container>
   );
 }
