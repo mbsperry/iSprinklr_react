@@ -122,8 +122,8 @@ function Settings() {
             ) : apiConfig ? (
               <Form>
                 {Object.entries(apiConfig).map(([key, value]) => {
-                  // Handle dummy_mode and schedule_on_off as switches
-                  if (key === 'dummy_mode' || key === 'schedule_on_off') {
+                  // Handle boolean switches
+                  if (key === 'dummy_mode' || key === 'schedule_on_off' || key === 'USE_STRICT_CORS') {
                     // Ensure value is a string before calling toLowerCase, or handle boolean true directly.
                     // Default to false if value is null, undefined, or not 'true' (string) or true (boolean).
                     let isChecked = false;
@@ -134,14 +134,24 @@ function Settings() {
                     }
                     
                     // Format the label to be more readable
-                    const formattedLabel = key === 'dummy_mode' 
-                      ? 'Dummy Mode' 
-                      : 'Enable Scheduled Runs';
+                    let formattedLabel = '';
+                    if (key === 'dummy_mode') {
+                      formattedLabel = 'Dummy Mode';
+                    } else if (key === 'schedule_on_off') {
+                      formattedLabel = 'Enable Scheduled Runs';
+                    } else if (key === 'USE_STRICT_CORS') {
+                      formattedLabel = 'Strict CORS Policy';
+                    }
                       
                     // Helper text for each option
-                    const helperText = key === 'dummy_mode'
-                      ? 'When enabled, the system operates without sending actual commands to hardware'
-                      : 'When enabled, scheduled runs will execute automatically';
+                    let helperText = '';
+                    if (key === 'dummy_mode') {
+                      helperText = 'When enabled, the system operates without sending actual commands to hardware';
+                    } else if (key === 'schedule_on_off') {
+                      helperText = 'When enabled, scheduler will run active schedule daily';
+                    } else if (key === 'USE_STRICT_CORS') {
+                      helperText = 'When enabled, strict CORS policies will be enforced for API requests';
+                    }
                       
                     return (
                       <Form.Group className="mb-3" key={key}>
