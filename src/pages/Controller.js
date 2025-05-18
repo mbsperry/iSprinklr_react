@@ -36,6 +36,10 @@ async function fetchScheduleOnOff() {
 async function fetchActiveSchedule() {
   const response = await fetchTimeout(`http://${config.API_SERVER}/api/scheduler/active`);
   if (!response.ok) {
+    if (response.status === 404) {
+      // 404 means no active schedule is set, which is a valid state
+      return { schedule_name: "None" };
+    }
     if (response.status === 422) {
       const error = await response.json();
       throw new Error(`Validation Error: ${error.detail[0].msg}`);
@@ -313,6 +317,11 @@ function ScheduleController() {
     return activeScheduleData.schedule_name || "";
   };
 
+  // Check if we have any defined schedules
+  const hasDefinedSchedules = () => {
+    return schedules && schedules.length > 0;
+  };
+
   // Is the schedule feature turned on?
   const isScheduleOn = () => {
     if (isLoadingOnOff || !onOffData) return false;
@@ -338,6 +347,11 @@ function ScheduleController() {
     <Card>
       <Card.Body>
         <Card.Title>Schedule Controller</Card.Title>
+        {!hasDefinedSchedules() && (
+          <div className="text-danger mb-3">
+            Add a schedule to enable schedule controls
+          </div>
+        )}
         <Stack gap="3">
           <Form.Check
             type="switch"
@@ -345,6 +359,7 @@ function ScheduleController() {
             label={`Schedule ${isScheduleOn() ? 'On' : 'Off'}`}
             checked={isScheduleOn()}
             onChange={handleScheduleOnOff}
+            disabled={!hasDefinedSchedules()}
           />
           
           <Form.Group>
@@ -352,7 +367,7 @@ function ScheduleController() {
             <Form.Select 
               value={getActiveScheduleName()} 
               onChange={handleScheduleChange}
-              disabled={!isScheduleOn()}
+              disabled={!isScheduleOn() || !hasDefinedSchedules()}
             >
               {/* Add test id to placeholder option for debugging */}
               <option data-testid="placeholder-option" key="select-placeholder" value="">Select a schedule</option>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Container, Form, Button, Card, Alert, Stack, Row, Col, Modal, InputGroup, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import config from '../config';
 import { fetchTimeout } from '../fetchTimeout.js';
 
@@ -318,6 +319,9 @@ function ScheduleEditor() {
   if (isLoadingSchedules || isLoadingSprinklers) return <Container><p>Loading schedule data...</p></Container>;
   if (schedulesError) return <Container><Alert variant="danger">Error loading schedules: {schedulesError.message}</Alert></Container>;
   if (sprinklersError) return <Container><Alert variant="danger">Error loading sprinklers: {sprinklersError.message}</Alert></Container>;
+  
+  // Check if there are no sprinkler zones defined
+  const noZonesDefined = Array.isArray(sprinklerList) && sprinklerList.length === 0;
 
   return (
     <Container className="my-4">
@@ -327,11 +331,25 @@ function ScheduleEditor() {
           {alert.message}
         </Alert>
       )}
+      
+      {noZonesDefined && (
+        <Alert variant="warning" className="mb-3">
+          <Alert.Heading>No Sprinkler Zones Defined</Alert.Heading>
+          <p>
+            Define sprinkler zones to enable schedule editing. 
+            Please go to <Link to="/sprinkler-zones">Configure Zones</Link> first to set up your sprinkler zones.
+          </p>
+        </Alert>
+      )}
 
       <Stack direction="horizontal" gap={3} className="mb-3 align-items-end">
         <Form.Group controlId="selectSchedule" className="flex-grow-1">
           <Form.Label>Select Schedule to Edit</Form.Label>
-          <Form.Select value={selectedScheduleName} onChange={handleScheduleSelect}>
+          <Form.Select 
+            value={selectedScheduleName} 
+            onChange={handleScheduleSelect}
+            disabled={noZonesDefined}
+          >
             <option value="">-- Select a Schedule --</option>
             {schedules.map(schedule => (
               <option key={schedule.schedule_name} value={schedule.schedule_name}>
@@ -340,7 +358,13 @@ function ScheduleEditor() {
             ))}
           </Form.Select>
         </Form.Group>
-        <Button variant="primary" onClick={() => setShowNewScheduleModal(true)}>Add New Schedule</Button>
+        <Button 
+          variant="primary" 
+          onClick={() => setShowNewScheduleModal(true)}
+          disabled={noZonesDefined}
+        >
+          Add New Schedule
+        </Button>
       </Stack>
 
       {editingSchedule && (
@@ -453,7 +477,10 @@ function ScheduleEditor() {
       )}
 
       {/* New Schedule Modal */}
-      <Modal show={showNewScheduleModal} onHide={() => setShowNewScheduleModal(false)}>
+      <Modal 
+        show={showNewScheduleModal && !noZonesDefined} 
+        onHide={() => setShowNewScheduleModal(false)}
+      >
         <Modal.Header closeButton>
           <Modal.Title>Create New Schedule</Modal.Title>
         </Modal.Header>

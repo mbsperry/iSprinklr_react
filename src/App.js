@@ -8,6 +8,7 @@ import Logs from './pages/Logs.js';
 import Status from './pages/Status.js';
 import Settings from './pages/Settings.js';
 import ScheduleEditor from './pages/ScheduleEditor.js'; // New schedule editor
+import SprinklerZones from './pages/SprinklerZones.js'; // Sprinkler zones configuration
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="logs" element={<Logs />} />
             <Route path="status" element={<Status />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="sprinkler-zones" element={<SprinklerZones />} /> {/* Sprinkler zones configuration */}
             <Route path="schedule-editor" element={<ScheduleEditor />} /> {/* Schedule Editor uses its own route */}
 
             {/* Using path="*"" means "match anything", so this route
@@ -53,7 +55,10 @@ function Layout() {
                           <Nav.Link as={Link} to="/schedule-editor">Schedule Editor</Nav.Link> {/* Schedule Editor link remains */}
                           <Nav.Link as={Link} to="/logs">Logs</Nav.Link>
                           <Nav.Link as={Link} to="/status">Status</Nav.Link>
-                          <Nav.Link as={Link} to="/settings">Settings</Nav.Link>
+                          <NavDropdown title="Settings" id="settings-dropdown">
+                              <NavDropdown.Item as={Link} to="/settings">App and API Settings</NavDropdown.Item>
+                              <NavDropdown.Item as={Link} to="/sprinkler-zones">Configure Zones</NavDropdown.Item>
+                          </NavDropdown>
                       </Nav>
                   </Navbar.Collapse>
               </Container>

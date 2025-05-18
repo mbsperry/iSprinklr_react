@@ -9,7 +9,6 @@ export async function fetchTimeout(resource, options = {}) {
   const response = await fetch(resource, {
     ...options,
     signal: controller.signal,
-    credentials: "include",
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
