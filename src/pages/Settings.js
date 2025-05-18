@@ -170,8 +170,7 @@ function Settings() {
                   }
                   // Handle log_level as a dropdown
                   if (key === 'log_level') {
-                    // Use the same log levels as in Logs.js
-                    const logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
+                    const logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
                     return (
                       <Form.Group className="mb-3" key={key}>
                         <Form.Label>Log Level</Form.Label>

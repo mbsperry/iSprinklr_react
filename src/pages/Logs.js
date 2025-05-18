@@ -41,7 +41,7 @@ function FilterControls({ filters, onFilterChange }) {
         queryFn: fetchModules
     });
 
-    const logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
+    const logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
 
     return (
         <Form className="mb-3">

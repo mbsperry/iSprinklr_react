@@ -136,7 +136,7 @@ function ScheduleEditor() {
   // Mutations
   const createMutation = useMutation({
     mutationFn: createSchedule,
-    onSuccess: (data) => { // Assuming API returns the created schedule, specifically its name
+    onSuccess: (data) => { 
       queryClient.invalidateQueries({ queryKey: ['allSchedules'] });
       setAlert({ show: true, variant: 'success', message: 'Schedule created successfully!' });
       setShowNewScheduleModal(false);
@@ -205,14 +205,19 @@ function ScheduleEditor() {
   }, [selectedScheduleName, schedules, sprinklerList]);
 
   // Handlers
+  // Helper to compare if schedule items have changed (ignoring the schedule name)
+  const hasUnsavedChanges = () => {
+    if (!editingSchedule || !originalEditingSchedule) return false;
+    
+    // Compare only the schedule_items, ignoring the schedule_name
+    return JSON.stringify(editingSchedule.schedule_items) !== 
+           JSON.stringify(originalEditingSchedule.schedule_items);
+  };
+
   const handleScheduleSelect = (e) => {
     const newSelectedName = e.target.value;
-    if (editingSchedule && originalEditingSchedule && JSON.stringify(editingSchedule) !== JSON.stringify(originalEditingSchedule)) {
+    if (hasUnsavedChanges()) {
       if (!window.confirm("You have unsaved changes. Are you sure you want to switch schedules and discard these changes?")) {
-        // To prevent the dropdown from changing visually, we can try to reset its value.
-        // However, the most straightforward way is to simply not update the state that controls it.
-        // The select input will momentarily show the new value, but then snap back on re-render if state isn't changed.
-        // For a controlled component, not calling setSelectedScheduleName is key.
         return; 
       }
     }
@@ -232,12 +237,12 @@ function ScheduleEditor() {
     const defaultItems = sprinklerList.map(sprinkler => ({
         zone: sprinkler.zone,
         name: sprinkler.name,
-        day: 'NONE', // Default to NONE
-        duration: 5  // Default duration in minutes
+        day: 'NONE', 
+        duration: 5  
     }));
     const newScheduleData = { 
         schedule_name: newScheduleName.trim(), 
-        schedule_items: defaultItems.map(item => ({ // map to API format for creation if needed, or let formatScheduleForApi handle it
+        schedule_items: defaultItems.map(item => ({ 
             zone: item.zone,
             day: item.day,
             duration: item.duration * 60 // to seconds for API
@@ -252,7 +257,13 @@ function ScheduleEditor() {
 
   const handleSaveSchedule = () => {
     if (editingSchedule) {
-      updateMutation.mutate(formatScheduleForApi(editingSchedule));
+      // Get the original schedule name from the selected schedule
+      const scheduleToUpdate = {
+        ...formatScheduleForApi(editingSchedule),
+        // Ensure we use the original schedule name (in case it was modified in the UI state)
+        schedule_name: selectedScheduleName
+      };
+      updateMutation.mutate(scheduleToUpdate);
     }
   };
 
@@ -265,7 +276,6 @@ function ScheduleEditor() {
   const handleScheduleItemChange = (index, field, value) => {
     if (!editingSchedule) return;
     const updatedItems = [...editingSchedule.schedule_items];
-    // Zone is fixed, so only duration and day can be changed per item by user directly
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     setEditingSchedule({ ...editingSchedule, schedule_items: updatedItems });
   };
@@ -278,12 +288,7 @@ function ScheduleEditor() {
     // If a multi-day option is clicked
     if (MULTI_DAY_OPTIONS.includes(newDayValue)) {
         // If the same multi-day option is clicked again, treat it as deselecting it, defaulting to "NONE"
-        // or allowing selection of individual days. For now, let's make it revert to "NONE".
-        // A better UX might be to clear it and allow day selection, but "NONE" is a safe default.
         // The ToggleButtonGroup type="radio" for multi-days means only one can be active.
-        // Clicking it again doesn't deselect it with type="radio".
-        // So, this part of the logic might be tricky if we want to "deselect" a radio button.
-        // For now, assume selecting a multi-day option is definitive.
         currentItem.day = newDayValue;
     } 
     // If an individual day of the week is clicked
@@ -313,8 +318,6 @@ function ScheduleEditor() {
     setEditingSchedule({ ...editingSchedule, schedule_items: updatedItems });
   };
 
-
-  // All zones are always present, so add/remove item functions are not needed.
 
   if (isLoadingSchedules || isLoadingSprinklers) return <Container><p>Loading schedule data...</p></Container>;
   if (schedulesError) return <Container><Alert variant="danger">Error loading schedules: {schedulesError.message}</Alert></Container>;
@@ -377,17 +380,7 @@ function ScheduleEditor() {
           </Card.Header>
           <Card.Body>
             <Form>
-              <Form.Group className="mb-3">
-                <Form.Label>Schedule Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={editingSchedule.schedule_name}
-                  onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_name: e.target.value })}
-                  placeholder="Enter schedule name"
-                />
-              </Form.Group>
-
-              <h6>Schedule Items</h6>
+              <h6 className="mb-3">Schedule Items</h6>
               {editingSchedule.schedule_items.map((item, index) => (
                 <Card key={index} className="mb-3 p-3 bg-light">
                   <Row className="align-items-center">
@@ -468,7 +461,11 @@ function ScheduleEditor() {
                   </Row>
                 </Card>
               ))}
-              <Button variant="primary" onClick={handleSaveSchedule} disabled={updateMutation.isPending || createMutation.isPending}>
+              <Button 
+                variant="primary" 
+                onClick={handleSaveSchedule} 
+                disabled={updateMutation.isPending || createMutation.isPending || !hasUnsavedChanges()}
+              >
                 {updateMutation.isPending || createMutation.isPending ? 'Saving...' : 'Save Schedule Changes'}
               </Button>
             </Form>
