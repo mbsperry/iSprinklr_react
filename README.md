@@ -20,10 +20,11 @@ There are 3 components:
 - View system logs to help debug any connection issues
 
 ## Installation Steps
-1. First, make sure you have the ESP32 controller (iSprinklr_esp) and API (iSprinklr_api) set up following their respective installation instructions.
+1. Install iSprinklr_esp (https://github.com/mbsperry/isprinklr_esp) and iSprinklr_api (https://github.com/mbsperry/isprinklr_api).
 2. Clone the repository: `git clone https://github.com/mbsperry/iSprinklr_react.git`
 3. Install dependencies: `npm install`
-4. Update the configuration: Edit `src/config.js` to point to your API server (the default is `127.0.0.1:8000`)
+4. Configure the API server: 
+   - Create a `.env` file in the project root and set `REACT_APP_ISPRINKLR_API_SERVER=your_api_server:port`
 5. Development mode: Run the application in development mode with `npm start`
 6. Production build: Build the application for production with `npm run build`
 7. Deploy: Copy the built application from the build folder to your web server or use a tool like `serve` to host it locally
@@ -37,6 +38,3 @@ For a complete setup of the iSprinklr system:
 
 ## Credit
 iSprinklr_esp relies on the HunterRoam library from ecodina (https://github.com/ecodina/hunter-wifi) to control the Hunter Pro-c.
-
-TODOs:
-* Fix the schedule editor to allow editing multiple schedules

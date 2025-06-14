@@ -57,8 +57,9 @@ function Settings() {
   
   // Handle saving the API server address (frontend config)
   const handleSaveApiServer = () => {
-    // In a real implementation, this would update the config file through a server endpoint
-    // For now, we'll just update the in-memory config and show a success message
+    // Save to localStorage so it persists across page reloads
+    localStorage.setItem('API_SERVER', apiServer);
+    // Update the in-memory config
     config.API_SERVER = apiServer;
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -101,7 +102,8 @@ function Settings() {
                   placeholder="127.0.0.1:8000"
                 />
                 <Form.Text className="text-muted">
-                  Format: IP_ADDRESS:PORT (e.g., 127.0.0.1:8000)
+                  Format: IP_ADDRESS:PORT (e.g., 127.0.0.1:8000)<br/>
+                  <strong>Note:</strong> This setting is saved in your browser's localStorage and only affects your current session. To set the API server for all users, use the environment variable <code>REACT_APP_ISPRINKLR_API_SERVER</code> when starting the application.
                 </Form.Text>
               </Form.Group>
               <Button 
